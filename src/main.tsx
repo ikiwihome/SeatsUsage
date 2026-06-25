@@ -99,6 +99,36 @@ const periodLabels: Record<PeriodKey, string> = {
   monthly: '月',
 }
 
+type ModelVendor = {
+  key: string
+  label: string
+  mark: string
+}
+
+const modelVendorRules: Array<ModelVendor & { tokens: string[] }> = [
+  { key: 'ark', label: 'Volcengine Ark', mark: 'ARK', tokens: ['ark-code', 'ark-'] },
+  { key: 'doubao', label: 'Doubao', mark: 'D', tokens: ['doubao', 'seed', 'bytedance', 'volc'] },
+  { key: 'deepseek', label: 'DeepSeek', mark: 'DS', tokens: ['deepseek', 'deep-seek'] },
+  { key: 'qwen', label: 'Qwen', mark: 'Q', tokens: ['qwen', 'qwq', 'qvq', 'tongyi', 'alibaba'] },
+  { key: 'kimi', label: 'Kimi', mark: 'K', tokens: ['kimi', 'moonshot'] },
+  { key: 'minimax', label: 'MiniMax', mark: 'M', tokens: ['minimax', 'abab'] },
+  { key: 'zhipu', label: 'Zhipu', mark: 'GLM', tokens: ['zhipu', 'glm', 'chatglm'] },
+  { key: 'baichuan', label: 'Baichuan', mark: 'BC', tokens: ['baichuan'] },
+  { key: 'baidu', label: 'Baidu', mark: 'B', tokens: ['baidu', 'ernie', 'wenxin'] },
+  { key: 'tencent', label: 'Tencent', mark: 'T', tokens: ['tencent', 'hunyuan'] },
+  { key: 'yi', label: '01.AI', mark: '01', tokens: ['01.ai', 'lingyi', 'yi-'] },
+  { key: 'openai', label: 'OpenAI', mark: 'O', tokens: ['openai', 'gpt'] },
+  { key: 'anthropic', label: 'Anthropic', mark: 'A', tokens: ['anthropic', 'claude'] },
+  { key: 'google', label: 'Google', mark: 'G', tokens: ['google', 'gemini'] },
+  { key: 'meta', label: 'Meta', mark: 'M', tokens: ['meta', 'llama'] },
+]
+
+const fallbackVendor: ModelVendor = {
+  key: 'generic',
+  label: 'Model',
+  mark: 'AI',
+}
+
 function toNumber(value: UsageValue) {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
@@ -182,6 +212,25 @@ function formatAxisLabel(value: string, period: PeriodKey, key?: string) {
   const label = formatChartDate(value, period, key)
   if (period === 'weekly') return label.replace(' 至 ', '\n至 ')
   return label
+}
+
+function getModelVendor(model: ModelRow): ModelVendor {
+  const provider = model.provider?.trim()
+  const haystack = [provider, model.displayName, model.modelId].filter(Boolean).join(' ').toLowerCase()
+  const matchedVendor = modelVendorRules.find((vendor) => vendor.tokens.some((token) => haystack.includes(token)))
+
+  if (matchedVendor) {
+    return {
+      key: matchedVendor.key,
+      label: provider || matchedVendor.label,
+      mark: matchedVendor.mark,
+    }
+  }
+
+  return {
+    ...fallbackVendor,
+    label: provider || fallbackVendor.label,
+  }
 }
 
 function formatDay(value: string | null) {
@@ -294,12 +343,22 @@ function App() {
           )}
           {state.status === 'ready' && state.data.models.models.length > 0 && (
             <div className="model-grid">
-              {state.data.models.models.map((model) => (
-                <article className="model-item" key={model.modelId}>
-                  <strong>{model.displayName}</strong>
-                  {model.displayName !== model.modelId && <span>{model.modelId}</span>}
-                </article>
-              ))}
+              {state.data.models.models.map((model) => {
+                const vendor = getModelVendor(model)
+
+                return (
+                  <article className="model-item" key={model.modelId}>
+                    <div className="model-heading">
+                      <ModelLogo vendor={vendor} />
+                      <div className="model-title">
+                        <strong>{model.displayName}</strong>
+                        <span className="model-provider">{vendor.label}</span>
+                      </div>
+                    </div>
+                    {model.displayName !== model.modelId && <span className="model-id">{model.modelId}</span>}
+                  </article>
+                )
+              })}
             </div>
           )}
         </section>
@@ -415,12 +474,13 @@ function BarChart({ points, period }: { points: UsagePoint[]; period: PeriodKey 
         <span>{summaryLabels[period]}</span>
       </div>
       <div className="bar-plot">
-        {points.map((point) => {
+        {points.map((point, index) => {
           const height = point.totalTokens > 0 ? Math.max(8, (point.totalTokens / maxValue) * 100) : 2
           const label = formatChartDate(point.label, period, point.key)
           const axisLabel = formatAxisLabel(point.label, period, point.key)
+          const edgeClass = index < 2 ? 'edge-start' : index >= points.length - 2 ? 'edge-end' : ''
           return (
-            <div className="bar-item" key={point.key}>
+            <div className={`bar-item ${edgeClass}`} key={point.key}>
               <div className="bar-column">
                 <div className="bar-tooltip">
                   <strong>{label}</strong>
@@ -440,6 +500,14 @@ function BarChart({ points, period }: { points: UsagePoint[]; period: PeriodKey 
         })}
       </div>
     </div>
+  )
+}
+
+function ModelLogo({ vendor }: { vendor: ModelVendor }) {
+  return (
+    <span className={`model-logo vendor-${vendor.key}`} aria-label={`${vendor.label} logo`} title={vendor.label}>
+      {vendor.mark}
+    </span>
   )
 }
 
