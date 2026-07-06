@@ -49,8 +49,8 @@ const columnLabels: Record<(typeof usageKeys)[number], string> = {
 }
 
 const accessMethods = [
-  { label: 'OpenAI BaseURL', value: 'https://api.evas.ai' },
-  { label: 'Anthropic BaseURL', value: 'https://api.evas.ai/v1' },
+  { label: 'OpenAI BaseURL', value: 'https://api.evas.ai/v1' },
+  { label: 'Anthropic BaseURL', value: 'https://api.evas.ai' },
   { label: 'API Key', value: 'sk-8Z9b7X8c6V7B8N9M0L1K2J3H4G5F6D7S8A9Q0W1E2R3T4Y5U6I' },
 ] as const
 
@@ -165,7 +165,8 @@ function App() {
       <main className="dashboard-main">
         <header className="topbar">
           <div>
-            <h1>火山方舟 Coding Plan 用量统计</h1>
+            <h1>火山方舟 Coding Plan Team Pro席位用量统计</h1>
+            <h3>600 元/月/席位</h3>
           </div>
           <div className="topbar-actions">
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
