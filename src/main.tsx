@@ -34,6 +34,28 @@ type LoadState =
   | { status: 'ready'; data: DashboardData }
   | { status: 'error'; message: string }
 
+type ProtocolTestResult = {
+  protocol: string
+  endpoint: string
+  ok: boolean
+  status: number | null
+  latencyMs: number
+  model: string
+  detail: string
+}
+
+type ProtocolTestsResponse = {
+  testedAt: string
+  model: string
+  results: ProtocolTestResult[]
+}
+
+type ProtocolTestState =
+  | { status: 'idle' }
+  | { status: 'running' }
+  | { status: 'ready'; data: ProtocolTestsResponse }
+  | { status: 'error'; message: string }
+
 const usageKeys = ['usage5h', 'usage7d', 'usage30d'] as const
 
 const usageWindowLabels: Record<(typeof usageKeys)[number], string> = {
@@ -264,8 +286,14 @@ function formatPeriod(start: string | null, end: string | null) {
   return `${startText} - ${endText}`
 }
 
-async function fetchJson<T>(url: string) {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } })
+async function fetchJson<T>(url: string, options?: RequestInit) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      ...(options?.headers || {}),
+    },
+  })
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(payload?.error || `请求失败：${response.status}`)
@@ -275,6 +303,7 @@ async function fetchJson<T>(url: string) {
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [protocolTestState, setProtocolTestState] = useState<ProtocolTestState>({ status: 'idle' })
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
   const [activeGuideTab, setActiveGuideTab] = useState<GuideTab>('Claude Code')
 
@@ -294,6 +323,19 @@ function App() {
   useEffect(() => {
     void loadDashboard()
   }, [loadDashboard])
+
+  const runProtocolTests = useCallback(async () => {
+    setProtocolTestState({ status: 'running' })
+    try {
+      const data = await fetchJson<ProtocolTestsResponse>('/api/protocol-tests', { method: 'POST' })
+      setProtocolTestState({ status: 'ready', data })
+    } catch (error) {
+      setProtocolTestState({
+        status: 'error',
+        message: error instanceof Error ? error.message : '协议测试失败',
+      })
+    }
+  }, [])
 
   const summary = useMemo(() => {
     if (state.status !== 'ready') {
@@ -550,6 +592,44 @@ function App() {
               </table>
             </div>
           )}
+        </section>
+
+        <section className="panel protocol-test-panel" aria-label="协议可用性与兼容性测试">
+          <div className="panel-title protocol-test-title">
+            <div>
+              <h2>协议可用性测试</h2>
+              <p className="panel-eyebrow">使用 {supportedModels[0]} 发起低 token 探测请求，验证三种接入协议是否可用。</p>
+            </div>
+            <button className="btn-secondary" type="button" onClick={runProtocolTests} disabled={protocolTestState.status === 'running'}>
+              {protocolTestState.status === 'running' ? '测试中' : '一键测试'}
+            </button>
+          </div>
+
+          <div className="protocol-test-grid">
+            {compatibleProtocols.map((protocol) => {
+              const result = protocolTestState.status === 'ready' ? protocolTestState.data.results.find((item) => item.protocol === protocol) : null
+              const isRunning = protocolTestState.status === 'running'
+              const isError = protocolTestState.status === 'error'
+              const tone = result?.ok ? 'ok' : result || isError ? 'fail' : isRunning ? 'running' : 'idle'
+              const statusText = result?.ok ? '可用' : result ? '失败' : isError ? '未完成' : isRunning ? '测试中' : '未测试'
+              const detail = result?.detail || (isError ? protocolTestState.message : isRunning ? '正在发起兼容性探测请求' : '点击一键测试后开始检测')
+
+              return (
+                <article className={`protocol-test-item ${tone}`} key={protocol}>
+                  <div className="protocol-test-head">
+                    <strong>{protocol}</strong>
+                    <span>{statusText}</span>
+                  </div>
+                  <div className="protocol-test-detail">{detail}</div>
+                  <div className="protocol-test-meta">
+                    <span>{result?.status ? `HTTP ${result.status}` : 'HTTP -'}</span>
+                    <span>{result ? `${result.latencyMs}ms` : '-ms'}</span>
+                  </div>
+                  {result?.endpoint && <div className="protocol-test-endpoint">{result.endpoint}</div>}
+                </article>
+              )
+            })}
+          </div>
         </section>
       </main>
     </div>

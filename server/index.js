@@ -9,6 +9,14 @@ dotenv.config()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 
+const protocolTestConfig = {
+  openAiBaseUrl: 'https://api.evas.ai/v1',
+  anthropicBaseUrl: 'https://api.evas.ai',
+  apiKey: 'sk-8Z9b7X8c6V7B8N9M0L1K2J3H4G5F6D7S8A9Q0W1E2R3T4Y5U6I',
+  model: 'deepseek/deepseek-v4-flash',
+  timeoutMs: 30000,
+}
+
 const config = {
   host: process.env.ARK_OPENAPI_HOST || 'ark.cn-beijing.volcengineapi.com',
   region: process.env.ARK_REGION || 'cn-beijing',
@@ -123,11 +131,18 @@ function signRequest({ action, body }) {
 
 async function callArk(action, body) {
   const signed = signRequest({ action, body })
-  const response = await fetch(signed.url, {
-    method: 'POST',
-    headers: signed.headers,
-    body: signed.bodyText,
-  })
+  let response
+  try {
+    response = await fetch(signed.url, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.bodyText,
+    })
+  } catch (error) {
+    const cause = error?.cause
+    const detail = [cause?.code, cause?.message || error?.message].filter(Boolean).join(': ')
+    throw new Error(detail || '火山 OpenAPI 网络请求失败')
+  }
   const text = await response.text()
   const payload = text ? tryJson(text) : null
   if (!response.ok || payload?.ResponseMetadata?.Error) {
@@ -335,6 +350,149 @@ function chunk(values, size) {
   return result
 }
 
+function joinUrl(baseUrl, pathName) {
+  return `${String(baseUrl).replace(/\/+$/, '')}/${String(pathName).replace(/^\/+/, '')}`
+}
+
+function anthropicMessagesUrl(baseUrl) {
+  const normalized = String(baseUrl).replace(/\/+$/, '')
+  return normalized.endsWith('/v1') ? `${normalized}/messages` : `${normalized}/v1/messages`
+}
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), protocolTestConfig.timeoutMs)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function summarizeProtocolPayload(protocol, payload, text) {
+  if (protocol === 'OpenAI Chat Completions') {
+    return stringValue(payload?.choices?.[0]?.message?.content) || stringValue(payload?.id) || text.slice(0, 160)
+  }
+
+  if (protocol === 'OpenAI Responses') {
+    const outputText = stringValue(payload?.output_text)
+    if (outputText) return outputText
+
+    const textParts = asArray(payload?.output)
+      .flatMap((item) => asArray(item?.content))
+      .map((content) => stringValue(content?.text))
+      .filter(Boolean)
+
+    return textParts.join(' ').trim() || stringValue(payload?.id) || text.slice(0, 160)
+  }
+
+  const contentText = asArray(payload?.content)
+    .map((content) => stringValue(content?.text))
+    .filter(Boolean)
+    .join(' ')
+
+  return contentText || stringValue(payload?.id) || text.slice(0, 160)
+}
+
+function isProtocolCompatible(protocol, payload) {
+  if (protocol === 'OpenAI Chat Completions') {
+    return Boolean(payload?.choices?.[0]?.message)
+  }
+
+  if (protocol === 'OpenAI Responses') {
+    return Boolean(payload?.output_text) || asArray(payload?.output).some((item) => asArray(item?.content).length > 0)
+  }
+
+  return asArray(payload?.content).length > 0
+}
+
+function protocolTestRequests() {
+  return [
+    {
+      protocol: 'OpenAI Chat Completions',
+      endpoint: joinUrl(protocolTestConfig.openAiBaseUrl, '/chat/completions'),
+      headers: {
+        Authorization: `Bearer ${protocolTestConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        model: protocolTestConfig.model,
+        messages: [{ role: 'user', content: 'Reply with OK.' }],
+        max_tokens: 8,
+        temperature: 0,
+      },
+    },
+    {
+      protocol: 'OpenAI Responses',
+      endpoint: joinUrl(protocolTestConfig.openAiBaseUrl, '/responses'),
+      headers: {
+        Authorization: `Bearer ${protocolTestConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        model: protocolTestConfig.model,
+        input: 'Reply with OK.',
+        max_output_tokens: 8,
+      },
+    },
+    {
+      protocol: 'Anthropic Messages',
+      endpoint: anthropicMessagesUrl(protocolTestConfig.anthropicBaseUrl),
+      headers: {
+        'x-api-key': protocolTestConfig.apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: {
+        model: protocolTestConfig.model,
+        max_tokens: 8,
+        messages: [{ role: 'user', content: 'Reply with OK.' }],
+      },
+    },
+  ]
+}
+
+async function runProtocolTest(requestConfig) {
+  const startedAt = Date.now()
+
+  try {
+    const upstreamResponse = await fetchWithTimeout(requestConfig.endpoint, {
+      method: 'POST',
+      headers: requestConfig.headers,
+      body: JSON.stringify(requestConfig.body),
+    })
+    const text = await upstreamResponse.text()
+    const payload = text ? tryJson(text) : {}
+    const compatible = upstreamResponse.ok && isProtocolCompatible(requestConfig.protocol, payload)
+    const detail = upstreamResponse.ok
+      ? compatible
+        ? summarizeProtocolPayload(requestConfig.protocol, payload, text)
+        : `返回 ${upstreamResponse.status}，但响应结构不符合 ${requestConfig.protocol}`
+      : payload?.error?.message || payload?.message || text || `HTTP ${upstreamResponse.status}`
+
+    return {
+      protocol: requestConfig.protocol,
+      endpoint: requestConfig.endpoint,
+      ok: compatible,
+      status: upstreamResponse.status,
+      latencyMs: Date.now() - startedAt,
+      model: protocolTestConfig.model,
+      detail: detail || (upstreamResponse.ok ? '请求成功' : '请求失败'),
+    }
+  } catch (error) {
+    return {
+      protocol: requestConfig.protocol,
+      endpoint: requestConfig.endpoint,
+      ok: false,
+      status: null,
+      latencyMs: Date.now() - startedAt,
+      model: protocolTestConfig.model,
+      detail: error instanceof Error ? error.message : '协议测试失败',
+    }
+  }
+}
+
 async function getSeatsUsage() {
   const seatInfoRows = []
   let pageNum = 1
@@ -405,6 +563,15 @@ app.get('/api/seats', async (_request, response) => {
       error: error instanceof Error ? error.message : '查询席位用量失败',
     })
   }
+})
+
+app.post('/api/protocol-tests', async (_request, response) => {
+  const results = await Promise.all(protocolTestRequests().map(runProtocolTest))
+  response.json({
+    testedAt: new Date().toISOString(),
+    model: protocolTestConfig.model,
+    results,
+  })
 })
 
 app.use(express.static(path.join(__dirname, '..', 'dist')))
