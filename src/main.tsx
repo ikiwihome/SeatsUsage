@@ -162,6 +162,23 @@ function App() {
     }
   }, [])
 
+  const handleCardCopy = useCallback(
+    (value: string) => {
+      void copyText(value)
+    },
+    [copyText],
+  )
+
+  const handleCardKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>, value: string) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        void copyText(value)
+      }
+    },
+    [copyText],
+  )
+
   return (
     <div className="app-shell">
       <main className="dashboard-main">
@@ -181,7 +198,15 @@ function App() {
           <Metric className="kpi-summary" label="平均近5小时" value={summary.usage5h} />
           <div className="access-stack" aria-label="BaseURL 接入方式">
             {accessMethods.slice(0, 2).map((item) => (
-              <article className="kpi access-card stacked-access-card" key={item.label}>
+              <article
+                className="kpi access-card stacked-access-card clickable-card"
+                key={item.label}
+                role="button"
+                tabIndex={0}
+                aria-label={`点击复制${item.label}`}
+                onClick={() => handleCardCopy(item.value)}
+                onKeyDown={(event) => handleCardKeyDown(event, item.value)}
+              >
                 <div className="label">{item.label}</div>
                 <div className="copy-row access-card-row">
                   <div className="copy-text-group">
@@ -190,14 +215,24 @@ function App() {
                   <CopyButton
                     copied={copiedValue === item.value}
                     label={`复制${item.label}`}
-                    onClick={() => void copyText(item.value)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void copyText(item.value)
+                    }}
                   />
                 </div>
               </article>
             ))}
           </div>
           <div className="access-stack key-stack" aria-label="API Key 与兼容协议">
-            <article className="kpi access-card access-card-key">
+            <article
+              className="kpi access-card access-card-key clickable-card"
+              role="button"
+              tabIndex={0}
+              aria-label={`点击复制${accessMethods[2].label}`}
+              onClick={() => handleCardCopy(accessMethods[2].value)}
+              onKeyDown={(event) => handleCardKeyDown(event, accessMethods[2].value)}
+            >
               <div className="label">{accessMethods[2].label}</div>
               <div className="copy-row access-card-row">
                 <div className="copy-text-group">
@@ -206,7 +241,10 @@ function App() {
                 <CopyButton
                   copied={copiedValue === accessMethods[2].value}
                   label={`复制${accessMethods[2].label}`}
-                  onClick={() => void copyText(accessMethods[2].value)}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void copyText(accessMethods[2].value)
+                  }}
                 />
               </div>
             </article>
@@ -231,12 +269,27 @@ function App() {
 
           <div className="model-grid compact-grid">
             {supportedModels.map((model) => (
-              <article className="model-item compact unified-card" key={model}>
+              <article
+                className="model-item compact unified-card clickable-card"
+                key={model}
+                role="button"
+                tabIndex={0}
+                aria-label={`点击复制${model}`}
+                onClick={() => handleCardCopy(model)}
+                onKeyDown={(event) => handleCardKeyDown(event, model)}
+              >
                 <div className="model-copy-row access-card-row">
                   <div className="copy-text-group model-copy-text-group">
                     <strong className="model-card-name">{model}</strong>
                   </div>
-                  <CopyButton copied={copiedValue === model} label={`复制${model}`} onClick={() => void copyText(model)} />
+                  <CopyButton
+                    copied={copiedValue === model}
+                    label={`复制${model}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void copyText(model)
+                    }}
+                  />
                 </div>
               </article>
             ))}
@@ -291,7 +344,15 @@ function App() {
   )
 }
 
-function CopyButton({ copied, label, onClick }: { copied: boolean; label: string; onClick: () => void }) {
+function CopyButton({
+  copied,
+  label,
+  onClick,
+}: {
+  copied: boolean
+  label: string
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+}) {
   return (
     <button
       className={`copy-button${copied ? ' is-copied' : ''}`}

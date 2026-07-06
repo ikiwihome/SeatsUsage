@@ -290,6 +290,24 @@ td .time-window {
   padding: 10px 12px;
 }
 
+.clickable-card {
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.clickable-card:focus-visible {
+  outline: none;
+  border-color: rgba(121, 199, 255, 0.48);
+  box-shadow:
+    0 0 0 4px rgba(121, 199, 255, 0.1),
+    var(--shadow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .stacked-access-card {
   min-height: 68px;
   padding: 10px 12px;
