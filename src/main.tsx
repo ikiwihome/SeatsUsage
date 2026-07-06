@@ -66,6 +66,165 @@ const supportedModels = [
   'xiaomi/mimo-v2.5-pro',
 ] as const
 
+const guideTabs = ['Claude Code', 'Codex', 'OpenCode', 'VS Code Copilot'] as const
+
+type GuideTab = (typeof guideTabs)[number]
+
+type GuideSection = {
+  title: string
+  description?: string
+  lines?: readonly string[]
+  code?: string
+}
+
+const guideContent: Record<GuideTab, { title: string; description: string; sections: readonly GuideSection[] }> = {
+  'Claude Code': {
+    title: 'Claude Code / Claude Code CLI',
+    description: 'Windows 与 Linux 都可以直接配置环境变量。下面给出可直接复制的值，默认将主模型指向 Pro，轻量任务指向 Flash。',
+    sections: [
+      {
+        title: 'Windows PowerShell',
+        code: [
+          `$env:ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
+          `$env:ANTHROPIC_API_KEY="${accessMethods[2].value}"`,
+          '$env:ANTHROPIC_MODEL="deepseek/deepseek-v4-pro"',
+          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-pro"',
+          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="z-ai/glm-5.2"',
+          '$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek/deepseek-v4-flash"',
+          '$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek/deepseek-v4-flash"',
+          '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
+          '$env:ANTHROPIC_API_KEY=""',
+        ].join('\n'),
+      },
+      {
+        title: 'Linux / Bash',
+        code: [
+          `export ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
+          `export ANTHROPIC_API_KEY="${accessMethods[2].value}"`,
+          'export ANTHROPIC_MODEL="deepseek/deepseek-v4-pro"',
+          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-pro"',
+          'export ANTHROPIC_DEFAULT_SONNET_MODEL="z-ai/glm-5.2"',
+          'export ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek/deepseek-v4-flash"',
+          'export CLAUDE_CODE_SUBAGENT_MODEL="deepseek/deepseek-v4-flash"',
+          'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
+          'export ANTHROPIC_API_KEY=""',
+        ].join('\n'),
+      },
+    ],
+  },
+  Codex: {
+    title: 'Codex',
+    description: 'Codex 通过 config.toml 指定 provider，再通过环境变量传入 API Key。下面给出一份可直接使用的示例。',
+    sections: [
+      {
+        title: '配置文件位置',
+        lines: ['Windows: %USERPROFILE%/.codex/config.toml', 'Linux: ~/.codex/config.toml'],
+      },
+      {
+        title: 'config.toml 示例',
+        code: [
+          'model = "deepseek/deepseek-v4-pro"',
+          'model_provider = "evas"',
+          'model_reasoning_effort = "high"',
+          '',
+          '[model_providers.evas]',
+          'name = "EVAS"',
+          `base_url = "${accessMethods[0].value}"`,
+          'env_key = "OPENAI_API_KEY"',
+          'wire_api = "responses"',
+        ].join('\n'),
+      },
+      {
+        title: 'API Key 环境变量',
+        code: [`$env:OPENAI_API_KEY="${accessMethods[2].value}"`, `export OPENAI_API_KEY="${accessMethods[2].value}"`].join('\n'),
+      },
+    ],
+  },
+  OpenCode: {
+    title: 'OpenCode',
+    description: 'OpenCode 按 OpenAI Compatible Provider 配置即可。不论你使用图形配置页还是配置文件，字段值都按下面填写。',
+    sections: [
+      {
+        title: '新增 Provider 时填写',
+        lines: [
+          'Provider Type: OpenAI Compatible',
+          'Provider Name: evas',
+          `Base URL: ${accessMethods[0].value}`,
+          `API Key: ${accessMethods[2].value}`,
+          'Default Model: deepseek/deepseek-v4-pro',
+          'Small / Fast Model: deepseek/deepseek-v4-flash',
+        ],
+      },
+      {
+        title: '如果你使用配置文件',
+        code: [
+          '{',
+          '  "provider": {',
+          '    "evas": {',
+          '      "type": "openai-compatible",',
+          `      "baseUrl": "${accessMethods[0].value}",`,
+          `      "apiKey": "${accessMethods[2].value}",`,
+          '      "defaultModel": "deepseek/deepseek-v4-pro",',
+          '      "smallModel": "deepseek/deepseek-v4-flash"',
+          '    }',
+          '  }',
+          '}',
+        ].join('\n'),
+      },
+    ],
+  },
+  'VS Code Copilot': {
+    title: 'VS Code Copilot',
+    description: '先在 VS Code 中安装 OAI Compatible Provider for Copilot，然后打开 settings.json，把以下配置粘贴进去。',
+    sections: [
+      {
+        title: '操作路径',
+        lines: ['扩展市场安装: OAI Compatible Provider for Copilot', '命令面板执行: Preferences: Open User Settings (JSON)', '把下面配置加入 settings.json'],
+      },
+      {
+        title: 'settings.json 示例',
+        code: [
+          '{',
+          '  "oaicopilot.baseUrl": "https://api.evas.ai/v1",',
+          '  "oaicopilot.models": [',
+          '    {',
+          '      "id": "deepseek/deepseek-v4-flash",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "deepseek"',
+          '    },',
+          '    {',
+          '      "id": "deepseek/deepseek-v4-pro",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "deepseek"',
+          '    },',
+          '    {',
+          '      "id": "z-ai/glm-5.2",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "glm"',
+          '    },',
+          '    {',
+          '      "id": "kimi-k2.7-code",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "moonshot"',
+          '    },',
+          '    {',
+          '      "id": "minimax/minimax-m3",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "minimax"',
+          '    },',
+          '    {',
+          '      "id": "xiaomi/mimo-v2.5-pro",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "xiaomi"',
+          '    }',
+          '  ]',
+          '}',
+        ].join('\n'),
+      },
+    ],
+  },
+}
+
 function toNumber(value: UsageValue) {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
@@ -117,6 +276,7 @@ async function fetchJson<T>(url: string) {
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
+  const [activeGuideTab, setActiveGuideTab] = useState<GuideTab>('Claude Code')
 
   const loadDashboard = useCallback(async () => {
     setState({ status: 'loading', message: '正在同步席位用量' })
@@ -178,6 +338,8 @@ function App() {
     },
     [copyText],
   )
+
+  const activeGuide = guideContent[activeGuideTab]
 
   return (
     <div className="app-shell">
@@ -293,6 +455,56 @@ function App() {
                 </div>
               </article>
             ))}
+          </div>
+
+          <div className="guide-card" aria-label="配置教程卡片">
+            <div className="guide-card-header">
+              <div>
+                <h3>配置教程</h3>
+                <p>{activeGuide.description}</p>
+              </div>
+              <div className="guide-tabs" role="tablist" aria-label="配置教程选项卡">
+                {guideTabs.map((tab) => (
+                  <button
+                    key={tab}
+                    className={tab === activeGuideTab ? 'active' : ''}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === activeGuideTab}
+                    aria-controls={`guide-panel-${tab}`}
+                    id={`guide-tab-${tab}`}
+                    onClick={() => setActiveGuideTab(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="guide-panel"
+              id={`guide-panel-${activeGuideTab}`}
+              role="tabpanel"
+              aria-labelledby={`guide-tab-${activeGuideTab}`}
+            >
+              <div className="guide-panel-title">{activeGuide.title}</div>
+              <div className="guide-section-list">
+                {activeGuide.sections.map((section) => (
+                  <section className="guide-section" key={section.title}>
+                    <h4>{section.title}</h4>
+                    {section.description && <p>{section.description}</p>}
+                    {section.lines && (
+                      <ul className="guide-bullet-list">
+                        {section.lines.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {section.code && <pre className="guide-code-block">{section.code}</pre>}
+                  </section>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
