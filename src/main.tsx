@@ -54,6 +54,8 @@ const accessMethods = [
   { label: 'API Key', value: 'sk-8Z9b7X8c6V7B8N9M0L1K2J3H4G5F6D7S8A9Q0W1E2R3T4Y5U6I' },
 ] as const
 
+const compatibleProtocols = ['OpenAI Chat Completions', 'OpenAI Responses', 'Anthropic Messages'] as const
+
 const supportedModels = [
   'deepseek/deepseek-v4-flash',
   'deepseek/deepseek-v4-pro',
@@ -165,8 +167,7 @@ function App() {
       <main className="dashboard-main">
         <header className="topbar">
           <div>
-            <h1>火山方舟 Coding Plan Team Pro席位用量统计</h1>
-            <h3>600 元/月/席位</h3>
+            <h1>火山方舟 Coding Plan 席位用量</h1>
           </div>
           <div className="topbar-actions">
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
@@ -195,19 +196,32 @@ function App() {
               </article>
             ))}
           </div>
-          <article className="kpi access-card access-card-key">
-            <div className="label">{accessMethods[2].label}</div>
-            <div className="copy-row access-card-row">
-              <div className="copy-text-group">
-                <span className="copy-value">{accessMethods[2].value}</span>
+          <div className="access-stack key-stack" aria-label="API Key 与兼容协议">
+            <article className="kpi access-card access-card-key">
+              <div className="label">{accessMethods[2].label}</div>
+              <div className="copy-row access-card-row">
+                <div className="copy-text-group">
+                  <span className="copy-value">{accessMethods[2].value}</span>
+                </div>
+                <CopyButton
+                  copied={copiedValue === accessMethods[2].value}
+                  label={`复制${accessMethods[2].label}`}
+                  onClick={() => void copyText(accessMethods[2].value)}
+                />
               </div>
-              <CopyButton
-                copied={copiedValue === accessMethods[2].value}
-                label={`复制${accessMethods[2].label}`}
-                onClick={() => void copyText(accessMethods[2].value)}
-              />
-            </div>
-          </article>
+            </article>
+
+            <article className="kpi access-card protocol-card">
+              <div className="label">兼容协议</div>
+              <div className="protocol-list" aria-label="兼容协议列表">
+                {compatibleProtocols.map((protocol) => (
+                  <span className="protocol-item" key={protocol}>
+                    {protocol}
+                  </span>
+                ))}
+              </div>
+            </article>
+          </div>
         </section>
 
         <section className="panel models-panel" aria-label="支持模型列表">

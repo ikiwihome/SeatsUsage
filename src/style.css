@@ -280,34 +280,62 @@ td .time-window {
   gap: 14px;
 }
 
-.access-card {
-  min-width: 0;
-}
-
-.stacked-access-card {
-  min-height: 96px;
-  padding: 14px 16px;
-}
-
-.access-card-key {
+.key-stack {
   grid-column: span 3;
 }
 
+.access-card {
+  min-width: 0;
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.stacked-access-card {
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.access-card-key {
+  min-width: 0;
+}
+
 .access-card-row {
-  min-height: 58px;
-}
-
-.stacked-access-card .label {
-  margin-bottom: 10px;
-}
-
-.stacked-access-card .access-card-row {
   min-height: 0;
   align-items: center;
 }
 
-.stacked-access-card .copy-value {
-  line-height: 1.35;
+.protocol-card {
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.access-card .label,
+.protocol-card .label {
+  margin-bottom: 6px;
+  font-size: var(--text-lg);
+  font-weight: 640;
+  letter-spacing: 0;
+}
+
+.protocol-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.protocol-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .copy-text-group {
@@ -318,7 +346,7 @@ td .time-window {
   display: block;
   margin-bottom: 3px;
   color: var(--muted);
-  font-size: var(--text-xs);
+  font-size: 13px;
   line-height: 1.35;
 }
 
@@ -327,8 +355,15 @@ td .time-window {
   overflow-wrap: anywhere;
   color: var(--fg);
   font-size: var(--text-sm);
-  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   line-height: 1.45;
+}
+
+.access-card .copy-value {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .copy-button {
@@ -1135,7 +1170,7 @@ td .time-window {
 
   .kpi-summary,
   .access-stack,
-  .access-card-key {
+  .key-stack {
     grid-column: span 3;
   }
 
@@ -1167,7 +1202,7 @@ td .time-window {
 
   .kpi-summary,
   .access-stack,
-  .access-card-key {
+  .key-stack {
     grid-column: span 1;
   }
 
