@@ -25,58 +25,14 @@ type SeatsResponse = {
   rawSeatCount: number
 }
 
-type UsagePoint = {
-  label: string
-  key: string
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  cacheTokensHit: number
-  reqCnt: number
-  imageCount: number
-}
-
-type InferenceUsageResponse = {
-  hourly: UsagePoint[]
-  daily: UsagePoint[]
-  weekly: UsagePoint[]
-  monthly: UsagePoint[]
-  fetchedAt: string
-  projectName: string
-  metric: string
-  range: {
-    start: string
-    end: string
-  }
-}
-
-type ModelRow = {
-  modelId: string
-  displayName: string
-  provider: string | null
-  contextLength: UsageValue
-}
-
-type ModelsResponse = {
-  models: ModelRow[]
-  fetchedAt: string
-  projectName: string
-  bizInfo: string
-  rawModelCount: number
-}
-
 type DashboardData = {
   seats: SeatsResponse
-  inferenceUsage: InferenceUsageResponse
-  models: ModelsResponse
 }
 
 type LoadState =
   | { status: 'loading'; message?: string }
   | { status: 'ready'; data: DashboardData }
   | { status: 'error'; message: string }
-
-type PeriodKey = 'hourly' | 'daily' | 'weekly' | 'monthly'
 
 const usageKeys = ['usage5h', 'usage7d', 'usage30d'] as const
 
@@ -92,42 +48,21 @@ const columnLabels: Record<(typeof usageKeys)[number], string> = {
   usage30d: '近一月用量',
 }
 
-const periodLabels: Record<PeriodKey, string> = {
-  hourly: '时',
-  daily: '日',
-  weekly: '周',
-  monthly: '月',
-}
+const accessMethods = [
+  { label: 'OpenAI BaseURL', value: 'https://api.evas.ai' },
+  { label: 'Anthropic BaseURL', value: 'https://api.evas.ai/v1' },
+  { label: 'API Key', value: 'sk-8Z9b7X8c6V7B8N9M0L1K2J3H4G5F6D7S8A9Q0W1E2R3T4Y5U6I' },
+] as const
 
-type ModelVendor = {
-  key: string
-  label: string
-  mark: string
-}
-
-const modelVendorRules: Array<ModelVendor & { tokens: string[] }> = [
-  { key: 'ark', label: 'Volcengine Ark', mark: 'ARK', tokens: ['ark-code', 'ark-'] },
-  { key: 'doubao', label: 'Doubao', mark: 'D', tokens: ['doubao', 'seed', 'bytedance', 'volc'] },
-  { key: 'deepseek', label: 'DeepSeek', mark: 'DS', tokens: ['deepseek', 'deep-seek'] },
-  { key: 'qwen', label: 'Qwen', mark: 'Q', tokens: ['qwen', 'qwq', 'qvq', 'tongyi', 'alibaba'] },
-  { key: 'kimi', label: 'Kimi', mark: 'K', tokens: ['kimi', 'moonshot'] },
-  { key: 'minimax', label: 'MiniMax', mark: 'M', tokens: ['minimax', 'abab'] },
-  { key: 'zhipu', label: 'Zhipu', mark: 'GLM', tokens: ['zhipu', 'glm', 'chatglm'] },
-  { key: 'baichuan', label: 'Baichuan', mark: 'BC', tokens: ['baichuan'] },
-  { key: 'baidu', label: 'Baidu', mark: 'B', tokens: ['baidu', 'ernie', 'wenxin'] },
-  { key: 'tencent', label: 'Tencent', mark: 'T', tokens: ['tencent', 'hunyuan'] },
-  { key: 'yi', label: '01.AI', mark: '01', tokens: ['01.ai', 'lingyi', 'yi-'] },
-  { key: 'openai', label: 'OpenAI', mark: 'O', tokens: ['openai', 'gpt'] },
-  { key: 'anthropic', label: 'Anthropic', mark: 'A', tokens: ['anthropic', 'claude'] },
-  { key: 'google', label: 'Google', mark: 'G', tokens: ['google', 'gemini'] },
-  { key: 'meta', label: 'Meta', mark: 'M', tokens: ['meta', 'llama'] },
-]
-
-const fallbackVendor: ModelVendor = {
-  key: 'generic',
-  label: 'Model',
-  mark: 'AI',
-}
+const supportedModels = [
+  'deepseek/deepseek-v4-flash',
+  'deepseek/deepseek-v4-pro',
+  'z-ai/glm-5.2',
+  'moonshotai/kimi-k2.6',
+  'minimax/minimax-m3',
+  'xiaomi/mimo-v2.5',
+  'xiaomi/mimo-v2.5-pro',
+] as const
 
 function toNumber(value: UsageValue) {
   if (value === null || value === undefined || value === '') return null
@@ -146,91 +81,6 @@ function formatAverage(seats: SeatRow[], key: (typeof usageKeys)[number]) {
   if (!values.length) return '-'
   const average = values.reduce((sum, value) => sum + value, 0) / values.length
   return `${Math.floor(average)}%`
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN').format(value)
-}
-
-function formatCompact(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
-}
-
-function formatTokenUnit(value: number) {
-  return `${formatNumber(value)} tokens`
-}
-
-function formatRequestUnit(value: number) {
-  return `${formatNumber(value)} 次`
-}
-
-function formatMonthDay(value: string) {
-  const shortMatch = value.match(/^(\d{1,2})\/(\d{1,2})$/)
-  if (shortMatch) return `${Number(shortMatch[1])}月${Number(shortMatch[2])}日`
-
-  const fullMatch = value.match(/^\d{4}[-/](\d{1,2})[-/](\d{1,2})$/)
-  if (fullMatch) return `${Number(fullMatch[1])}月${Number(fullMatch[2])}日`
-
-  return value
-}
-
-function formatChartDate(value: string, period: PeriodKey, key?: string) {
-  if (period === 'hourly') {
-    const source = key || value
-    const match = source.match(/(?:T|\s)(\d{1,2})(?::\d{2})?/) || value.match(/^(\d{1,2})(?::\d{2})?/)
-    if (match) return `${Number(match[1])}时`
-  }
-  if (period === 'weekly') {
-    const rangeMatch = value.match(/^(.+?)\s+-\s+(.+)$/)
-    if (rangeMatch) return `${formatMonthDay(rangeMatch[1])} 至 ${formatMonthDay(rangeMatch[2])}`
-    return formatMonthDay(value)
-  }
-  if (period === 'monthly') {
-    const source = key || value
-    const match = source.match(/^(\d{4})[-/](\d{1,2})/)
-    if (match) return `${match[1]}年${Number(match[2])}月`
-  }
-  if (/^\d{2}\/\d{2}$/.test(value)) {
-    const [month, day] = value.split('/')
-    return `${Number(month)}月${Number(day)}日`
-  }
-  if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(value)) {
-    const [, month, day] = value.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/) || []
-    return `${Number(month)}月${Number(day)}日`
-  }
-  if (/^\d{4}[-/]\d{2}$/.test(value)) {
-    const [, month] = value.match(/^(\d{4})[-/](\d{2})$/) || []
-    return `${Number(month)}月`
-  }
-  return value
-}
-
-function formatAxisLabel(value: string, period: PeriodKey, key?: string) {
-  const label = formatChartDate(value, period, key)
-  if (period === 'weekly') return label.replace(' 至 ', '\n至 ')
-  return label
-}
-
-function getModelVendor(model: ModelRow): ModelVendor {
-  const provider = model.provider?.trim()
-  const haystack = [provider, model.displayName, model.modelId].filter(Boolean).join(' ').toLowerCase()
-  const matchedVendor = modelVendorRules.find((vendor) => vendor.tokens.some((token) => haystack.includes(token)))
-
-  if (matchedVendor) {
-    return {
-      key: matchedVendor.key,
-      label: provider || matchedVendor.label,
-      mark: matchedVendor.mark,
-    }
-  }
-
-  return {
-    ...fallbackVendor,
-    label: provider || fallbackVendor.label,
-  }
 }
 
 function formatDay(value: string | null) {
@@ -264,17 +114,13 @@ async function fetchJson<T>(url: string) {
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
-  const [period, setPeriod] = useState<PeriodKey>('hourly')
+  const [copiedValue, setCopiedValue] = useState<string | null>(null)
 
   const loadDashboard = useCallback(async () => {
-    setState({ status: 'loading', message: '正在同步席位和推理用量' })
+    setState({ status: 'loading', message: '正在同步席位用量' })
     try {
-      const [seats, inferenceUsage, models] = await Promise.all([
-        fetchJson<SeatsResponse>('/api/seats'),
-        fetchJson<InferenceUsageResponse>('/api/inference-usage'),
-        fetchJson<ModelsResponse>('/api/models'),
-      ])
-      setState({ status: 'ready', data: { seats, inferenceUsage, models } })
+      const seats = await fetchJson<SeatsResponse>('/api/seats')
+      setState({ status: 'ready', data: { seats } })
     } catch (error) {
       setState({
         status: 'error',
@@ -292,23 +138,27 @@ function App() {
       return {
         seats: 0,
         usage5h: '-',
-        todayTokens: '-',
-        monthTokens: '-',
       }
     }
-    const { seats, inferenceUsage } = state.data
-    const today = inferenceUsage.daily.at(-1)?.totalTokens ?? 0
-    const month = inferenceUsage.monthly.at(-1)?.totalTokens ?? 0
+    const { seats } = state.data
 
     return {
       seats: seats.seats.length,
       usage5h: formatAverage(seats.seats, 'usage5h'),
-      todayTokens: `${formatCompact(today)} Tokens`,
-      monthTokens: `${formatCompact(month)} Tokens`,
     }
   }, [state])
 
-  const activeSeries = state.status === 'ready' ? state.data.inferenceUsage[period] : []
+  const copyText = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedValue(value)
+      window.setTimeout(() => {
+        setCopiedValue((current) => (current === value ? null : current))
+      }, 1600)
+    } catch (error) {
+      console.error('复制失败', error)
+    }
+  }, [])
 
   return (
     <div className="app-shell">
@@ -325,10 +175,38 @@ function App() {
         </header>
 
         <section className="kpis" aria-label="用量概览">
-          <Metric label="有效席位" value={summary.seats} />
-          <Metric label="平均近5小时" value={summary.usage5h} />
-          <Metric label="今日用量" value={summary.todayTokens} />
-          <Metric label="本月用量" value={summary.monthTokens} />
+          <Metric className="kpi-summary" label="有效席位" value={summary.seats} />
+          <Metric className="kpi-summary" label="平均近5小时" value={summary.usage5h} />
+          <div className="access-stack" aria-label="BaseURL 接入方式">
+            {accessMethods.slice(0, 2).map((item) => (
+              <article className="kpi access-card stacked-access-card" key={item.label}>
+                <div className="label">{item.label}</div>
+                <div className="copy-row access-card-row">
+                  <div className="copy-text-group">
+                    <span className="copy-value">{item.value}</span>
+                  </div>
+                  <CopyButton
+                    copied={copiedValue === item.value}
+                    label={`复制${item.label}`}
+                    onClick={() => void copyText(item.value)}
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
+          <article className="kpi access-card access-card-key">
+            <div className="label">{accessMethods[2].label}</div>
+            <div className="copy-row access-card-row">
+              <div className="copy-text-group">
+                <span className="copy-value">{accessMethods[2].value}</span>
+              </div>
+              <CopyButton
+                copied={copiedValue === accessMethods[2].value}
+                label={`复制${accessMethods[2].label}`}
+                onClick={() => void copyText(accessMethods[2].value)}
+              />
+            </div>
+          </article>
         </section>
 
         <section className="panel models-panel" aria-label="支持模型列表">
@@ -336,55 +214,18 @@ function App() {
             <h2>支持模型列表</h2>
           </div>
 
-          {state.status === 'loading' && <StatusBlock title="正在加载" detail={state.message || '正在读取支持模型'} />}
-          {state.status === 'error' && <StatusBlock title="加载失败" detail={state.message} tone="danger" />}
-          {state.status === 'ready' && state.data.models.models.length === 0 && (
-            <StatusBlock title="暂无模型" detail="ListArkCodingPlanModel 没有返回可展示的模型。" />
-          )}
-          {state.status === 'ready' && state.data.models.models.length > 0 && (
-            <div className="model-grid">
-              {state.data.models.models.map((model) => {
-                const vendor = getModelVendor(model)
-
-                return (
-                  <article className="model-item" key={model.modelId}>
-                    <div className="model-heading">
-                      <ModelLogo vendor={vendor} />
-                      <div className="model-title">
-                        <strong>{model.displayName}</strong>
-                        <span className="model-provider">{vendor.label}</span>
-                      </div>
-                    </div>
-                    {model.displayName !== model.modelId && <span className="model-id">{model.modelId}</span>}
-                  </article>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="panel usage-panel" id="usage">
-          <div className="panel-title">
-            <div>
-              <h2>推理使用量</h2>
-            </div>
-            <div className="segmented-control" aria-label="统计周期">
-              {(Object.keys(periodLabels) as PeriodKey[]).map((key) => (
-                <button
-                  key={key}
-                  className={period === key ? 'active' : ''}
-                  type="button"
-                  onClick={() => setPeriod(key)}
-                >
-                  {periodLabels[key]}
-                </button>
-              ))}
-            </div>
+          <div className="model-grid compact-grid">
+            {supportedModels.map((model) => (
+              <article className="model-item compact unified-card" key={model}>
+                <div className="model-copy-row access-card-row">
+                  <div className="copy-text-group model-copy-text-group">
+                    <strong className="model-card-name">{model}</strong>
+                  </div>
+                  <CopyButton copied={copiedValue === model} label={`复制${model}`} onClick={() => void copyText(model)} />
+                </div>
+              </article>
+            ))}
           </div>
-
-          {state.status === 'loading' && <StatusBlock title="正在加载" detail={state.message || '正在读取推理用量'} />}
-          {state.status === 'error' && <StatusBlock title="加载失败" detail={state.message} tone="danger" />}
-          {state.status === 'ready' && <BarChart points={activeSeries} period={period} />}
         </section>
 
         <section className="panel seats-panel" id="seats">
@@ -435,79 +276,49 @@ function App() {
   )
 }
 
+function CopyButton({ copied, label, onClick }: { copied: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      className={`copy-button${copied ? ' is-copied' : ''}`}
+      type="button"
+      aria-label={copied ? `${label}，已复制` : label}
+      aria-pressed={copied}
+      title={copied ? '已复制' : '复制'}
+      onClick={onClick}
+    >
+      {copied ? (
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M16.2 5.3a.75.75 0 0 1 0 1.06l-7.2 7.2a.75.75 0 0 1-1.06 0l-3.14-3.14a.75.75 0 1 1 1.06-1.06l2.61 2.61 6.67-6.67a.75.75 0 0 1 1.06 0Z" fill="currentColor" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M7 3.5A2.5 2.5 0 0 0 4.5 6v7A2.5 2.5 0 0 0 7 15.5h5A2.5 2.5 0 0 0 14.5 13V6A2.5 2.5 0 0 0 12 3.5H7Zm0 1h5A1.5 1.5 0 0 1 13.5 6v7a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 13V6A1.5 1.5 0 0 1 7 4.5Z" fill="currentColor" />
+          <path d="M9 1.5A2.5 2.5 0 0 1 11.5 4v.5h-1V4A1.5 1.5 0 0 0 9 2.5H5A1.5 1.5 0 0 0 3.5 4v6A1.5 1.5 0 0 0 5 11.5h.5v1H5A2.5 2.5 0 0 1 2.5 10V4A2.5 2.5 0 0 1 5 1.5h4Z" fill="currentColor" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 function Metric({
+  className,
   label,
   value,
   delta,
   tone = 'neutral',
 }: {
+  className?: string
   label: string
   value: React.ReactNode
   delta?: string
   tone?: 'neutral' | 'up'
 }) {
   return (
-    <article className="kpi">
+    <article className={className ? `kpi ${className}` : 'kpi'}>
       <div className="label">{label}</div>
       <div className="value">{value}</div>
       {delta && <div className={`delta ${tone}`}>{delta}</div>}
     </article>
-  )
-}
-
-function BarChart({ points, period }: { points: UsagePoint[]; period: PeriodKey }) {
-  const maxValue = Math.max(...points.map((point) => point.totalTokens), 1)
-  const summaryPoint =
-    period === 'hourly' ? [...points].reverse().find((point) => point.totalTokens > 0 || point.reqCnt > 0) : points.at(-1)
-  const currentTotal = summaryPoint?.totalTokens ?? 0
-  const summaryLabels: Record<PeriodKey, string> = {
-    hourly: '最近小时Token总用量',
-    daily: '今日Token总用量',
-    weekly: '本周Token总用量',
-    monthly: '本月Token总用量',
-  }
-
-  return (
-    <div className={`bar-chart period-${period}`} role="img" aria-label={`${periodLabels[period]}推理用量柱状图`}>
-      <div className="chart-summary">
-        <strong>{formatCompact(currentTotal)}</strong>
-        <span>{summaryLabels[period]}</span>
-      </div>
-      <div className="bar-plot">
-        {points.map((point, index) => {
-          const height = point.totalTokens > 0 ? Math.max(8, (point.totalTokens / maxValue) * 100) : 2
-          const label = formatChartDate(point.label, period, point.key)
-          const axisLabel = formatAxisLabel(point.label, period, point.key)
-          const edgeClass = index < 2 ? 'edge-start' : index >= points.length - 2 ? 'edge-end' : ''
-          return (
-            <div className={`bar-item ${edgeClass}`} key={point.key}>
-              <div className="bar-column">
-                <div className="bar-tooltip">
-                  <strong>{label}</strong>
-                  <span>总用量：{formatTokenUnit(point.totalTokens)}</span>
-                  <span>输入：{formatTokenUnit(point.inputTokens)}</span>
-                  <span>输出：{formatTokenUnit(point.outputTokens)}</span>
-                  <span>缓存命中：{formatTokenUnit(point.cacheTokensHit)}</span>
-                  <span>请求次数：{formatRequestUnit(point.reqCnt)}</span>
-                </div>
-                <div className="bar-fill" style={{ height: `${height}%` }} />
-              </div>
-              <span className="bar-label" title={label}>
-                {axisLabel}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function ModelLogo({ vendor }: { vendor: ModelVendor }) {
-  return (
-    <span className={`model-logo vendor-${vendor.key}`} aria-label={`${vendor.label} logo`} title={vendor.label}>
-      {vendor.mark}
-    </span>
   )
 }
 
