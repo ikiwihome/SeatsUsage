@@ -682,6 +682,17 @@ td .time-window {
   white-space: nowrap;
 }
 
+.model-card-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .unified-card .model-id {
   margin-top: 2px;
   color: var(--muted-2);

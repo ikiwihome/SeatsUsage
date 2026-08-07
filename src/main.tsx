@@ -58,13 +58,16 @@ const compatibleProtocols = ['OpenAI Chat Completions', 'OpenAI Responses', 'Ant
 
 const supportedModels = [
   'deepseek/deepseek-v4-flash',
-  'deepseek/deepseek-v4-pro',
   'z-ai/glm-5.2',
   'moonshotai/kimi-k2.6',
   'minimax/minimax-m3',
   'xiaomi/mimo-v2.5',
   'xiaomi/mimo-v2.5-pro',
 ] as const
+
+const modelNotes: Record<string, string> = {
+  'deepseek/deepseek-v4-flash': 'DeepSeek-V4-Flash-0731正式版',
+}
 
 const guideTabs = ['Claude Code', 'Codex', 'OpenCode', 'VS Code Copilot'] as const
 
@@ -80,34 +83,40 @@ type GuideSection = {
 const guideContent: Record<GuideTab, { title: string; description: string; sections: readonly GuideSection[] }> = {
   'Claude Code': {
     title: 'Claude Code / Claude Code CLI',
-    description: 'Windows 与 Linux 都可以直接配置环境变量。下面给出可直接复制的值，默认将主模型指向 Pro，轻量任务指向 Flash。',
+    description: 'Windows 与 Linux 都可以直接配置环境变量。下面给出可直接复制的值，默认将主模型指向 Flash。',
     sections: [
       {
         title: 'Windows PowerShell',
         code: [
           `$env:ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
-          `$env:ANTHROPIC_API_KEY="${accessMethods[2].value}"`,
-          '$env:ANTHROPIC_MODEL="deepseek/deepseek-v4-pro"',
-          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-pro"',
-          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="z-ai/glm-5.2"',
+          `$env:ANTHROPIC_AUTH_TOKEN="${accessMethods[2].value}"`,
+          '$env:ANTHROPIC_MODEL="deepseek/deepseek-v4-flash"',
+          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-flash"',
+          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek/deepseek-v4-flash"',
           '$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek/deepseek-v4-flash"',
           '$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek/deepseek-v4-flash"',
-          '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
           '$env:ANTHROPIC_API_KEY=""',
+          '$env:CLAUDE_CODE_DISABLE_NON_ANTHROPIC_API="1"',
+          '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
+          '$env:CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT="1"',
+          '$env:CLAUDE_CODE_MAX_CONTEXT_TOKENS="1000000"',
         ].join('\n'),
       },
       {
         title: 'Linux / Bash',
         code: [
           `export ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
-          `export ANTHROPIC_API_KEY="${accessMethods[2].value}"`,
-          'export ANTHROPIC_MODEL="deepseek/deepseek-v4-pro"',
-          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-pro"',
-          'export ANTHROPIC_DEFAULT_SONNET_MODEL="z-ai/glm-5.2"',
+          `export ANTHROPIC_AUTH_TOKEN="${accessMethods[2].value}"`,
+          'export ANTHROPIC_MODEL="deepseek/deepseek-v4-flash"',
+          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek/deepseek-v4-flash"',
+          'export ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek/deepseek-v4-flash"',
           'export ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek/deepseek-v4-flash"',
           'export CLAUDE_CODE_SUBAGENT_MODEL="deepseek/deepseek-v4-flash"',
-          'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
           'export ANTHROPIC_API_KEY=""',
+          'export CLAUDE_CODE_DISABLE_NON_ANTHROPIC_API="1"',
+          'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
+          'export CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT="1"',
+          'export CLAUDE_CODE_MAX_CONTEXT_TOKENS="1000000"',
         ].join('\n'),
       },
     ],
@@ -123,7 +132,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
       {
         title: 'config.toml 示例',
         code: [
-          'model = "deepseek/deepseek-v4-pro"',
+          'model = "deepseek/deepseek-v4-flash"',
           'model_provider = "evas"',
           'model_reasoning_effort = "high"',
           '',
@@ -151,7 +160,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           'Provider Name: evas',
           `Base URL: ${accessMethods[0].value}`,
           `API Key: ${accessMethods[2].value}`,
-          'Default Model: deepseek/deepseek-v4-pro',
+          'Default Model: deepseek/deepseek-v4-flash',
           'Small / Fast Model: deepseek/deepseek-v4-flash',
         ],
       },
@@ -159,13 +168,18 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
         title: '如果你使用配置文件',
         code: [
           '{',
+          '  "$schema": "https://opencode.ai/config.json",',
           '  "provider": {',
-          '    "evas": {',
-          '      "type": "openai-compatible",',
-          `      "baseUrl": "${accessMethods[0].value}",`,
-          `      "apiKey": "${accessMethods[2].value}",`,
-          '      "defaultModel": "deepseek/deepseek-v4-pro",',
-          '      "smallModel": "deepseek/deepseek-v4-flash"',
+          '    "openai": {',
+          '      "options": {',
+          `        "baseURL": "${accessMethods[0].value}",`,
+          `        "apiKey": "${accessMethods[2].value}"`,
+          '      },',
+          '      "models": {',
+          '        "deepseek/deepseek-v4-flash": {',
+          '          "name": "deepseek/deepseek-v4-flash"',
+          '        }',
+          '      }',
           '    }',
           '  }',
           '}',
@@ -193,17 +207,12 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      "owned_by": "deepseek"',
           '    },',
           '    {',
-          '      "id": "deepseek/deepseek-v4-pro",',
-          '      "apiMode": "openai",',
-          '      "owned_by": "deepseek"',
-          '    },',
-          '    {',
           '      "id": "z-ai/glm-5.2",',
           '      "apiMode": "openai",',
           '      "owned_by": "glm"',
           '    },',
           '    {',
-          '      "id": "kimi-k2.7-code",',
+          '      "id": "moonshotai/kimi-k2.6",',
           '      "apiMode": "openai",',
           '      "owned_by": "moonshot"',
           '    },',
@@ -211,6 +220,11 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      "id": "minimax/minimax-m3",',
           '      "apiMode": "openai",',
           '      "owned_by": "minimax"',
+          '    },',
+          '    {',
+          '      "id": "xiaomi/mimo-v2.5",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "xiaomi"',
           '    },',
           '    {',
           '      "id": "xiaomi/mimo-v2.5-pro",',
@@ -449,6 +463,7 @@ function App() {
                 <div className="model-copy-row access-card-row">
                   <div className="copy-text-group model-copy-text-group">
                     <strong className="model-card-name">{model}</strong>
+                    {modelNotes[model] && <span className="model-card-note">{modelNotes[model]}</span>}
                   </div>
                   <CopyButton
                     copied={copiedValue === model}
