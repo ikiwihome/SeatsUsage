@@ -38,6 +38,14 @@
 	- OpenCode
 	- VS Code Copilot
 
+### 4. 问题反馈
+
+- 页面内置多行问题反馈卡片，提交后可列表展示
+- 反馈数据持久化到 `data/feedback.json`，页面刷新 / 服务重启均不丢失
+- 可通过环境变量调整存储上限（默认最多 500 条、单条最长 2000 字）：
+	- `FEEDBACK_MAX_ITEMS`
+	- `FEEDBACK_MAX_LENGTH`
+
 ## Tech Stack
 
 - Frontend: React 19, React DOM, Vite, TypeScript

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
@@ -408,6 +409,67 @@ app.get('/api/seats', async (_request, response) => {
       error: error instanceof Error ? error.message : '查询席位用量失败',
     })
   }
+})
+
+// 问题反馈持久化（存储为本地 JSON 文件，服务重启/页面刷新均不丢失）
+const feedbackFile = path.join(__dirname, '..', 'data', 'feedback.json')
+const FEEDBACK_MAX_ITEMS = Number(process.env.FEEDBACK_MAX_ITEMS || 500)
+const FEEDBACK_MAX_LENGTH = Number(process.env.FEEDBACK_MAX_LENGTH || 2000)
+
+function readFeedbackFile() {
+  try {
+    if (!fs.existsSync(feedbackFile)) return []
+    const parsed = JSON.parse(fs.readFileSync(feedbackFile, 'utf8'))
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error('读取反馈文件失败', error)
+    return []
+  }
+}
+
+function writeFeedbackFile(items) {
+  fs.mkdirSync(path.dirname(feedbackFile), { recursive: true })
+  const tempFile = `${feedbackFile}.tmp`
+  fs.writeFileSync(tempFile, JSON.stringify(items, null, 2), 'utf8')
+  fs.renameSync(tempFile, feedbackFile)
+}
+
+function sanitizeFeedback(input) {
+  return typeof input === 'string' ? input.trim() : ''
+}
+
+app.get('/api/feedback', (_request, response) => {
+  response.json({ items: readFeedbackFile() })
+})
+
+app.post('/api/feedback', (request, response) => {
+  const content = sanitizeFeedback(request.body?.content)
+  if (!content) {
+    response.status(400).json({ error: '反馈内容不能为空' })
+    return
+  }
+  if (content.length > FEEDBACK_MAX_LENGTH) {
+    response.status(400).json({ error: `反馈内容不能超过 ${FEEDBACK_MAX_LENGTH} 字` })
+    return
+  }
+
+  const items = readFeedbackFile()
+  const item = {
+    id: Date.now(),
+    content,
+    createdAt: new Date().toISOString(),
+  }
+  items.unshift(item)
+  const trimmed = items.slice(0, FEEDBACK_MAX_ITEMS)
+
+  try {
+    writeFeedbackFile(trimmed)
+  } catch (error) {
+    response.status(500).json({ error: '保存反馈失败，请稍后再试' })
+    return
+  }
+
+  response.status(201).json({ item })
 })
 
 app.use(express.static(path.join(__dirname, '..', 'dist')))

@@ -29,6 +29,16 @@ type DashboardData = {
   seats: SeatsResponse
 }
 
+type FeedbackItem = {
+  id: number
+  content: string
+  createdAt: string
+}
+
+type FeedbackResponse = {
+  items: FeedbackItem[]
+}
+
 type LoadState =
   | { status: 'loading'; message?: string }
   | { status: 'ready'; data: DashboardData }
@@ -67,6 +77,8 @@ const supportedModels = [
   'z-ai/glm-latest',
   'moonshotai/kimi-latest',
   'minimax/minimax-latest',
+  'xiaomi/mimo-v2.5',
+  'xiaomi/mimo-v2.5-pro',
 ] as const
 
 const modelNotes: Record<string, string> = {
@@ -80,6 +92,8 @@ const modelNotes: Record<string, string> = {
   'z-ai/glm-latest': 'glm-5.3',
   'moonshotai/kimi-latest': 'kimi-k2.7-code',
   'minimax/minimax-latest': 'minimax-m3',
+  'xiaomi/mimo-v2.5': 'mimo-v2.5',
+  'xiaomi/mimo-v2.5-pro': 'mimo-v2.5-pro',
 }
 
 const guideTabs = ['Claude Code', 'Codex', 'OpenCode', 'VS Code Copilot'] as const
@@ -217,52 +231,86 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '    {',
           '      "id": "auto",',
           '      "apiMode": "openai",',
-          '      "owned_by": "evas"',
+          '      "owned_by": "evas",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
           '    },',
           '    {',
           '      "id": "deepseek/deepseek-v4-flash",',
           '      "apiMode": "openai",',
-          '      "owned_by": "deepseek"',
+          '      "owned_by": "deepseek",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
           '    },',
           '    {',
           '      "id": "deepseek/deepseek-v4-pro",',
           '      "apiMode": "openai",',
-          '      "owned_by": "deepseek"',
+          '      "owned_by": "deepseek",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
           '    },',
           '    {',
           '      "id": "z-ai/glm-5.3",',
           '      "apiMode": "openai",',
-          '      "owned_by": "glm"',
+          '      "owned_by": "glm",',
+          '      "context_length": 81920,',
+          '      "max_tokens": 81920,',
           '    },',
           '    {',
           '      "id": "moonshotai/kimi-k2.7-code",',
           '      "apiMode": "openai",',
-          '      "owned_by": "moonshot"',
+          '      "owned_by": "moonshot",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 384000,',
           '    },',
           '    {',
           '      "id": "minimax/minimax-m3",',
           '      "apiMode": "openai",',
-          '      "owned_by": "minimax"',
+          '      "owned_by": "minimax",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 131072,',
           '    },',
           '    {',
           '      "id": "deepseek/deepseek-latest",',
           '      "apiMode": "openai",',
-          '      "owned_by": "deepseek"',
+          '      "owned_by": "deepseek",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
           '    },',
           '    {',
           '      "id": "z-ai/glm-latest",',
           '      "apiMode": "openai",',
-          '      "owned_by": "glm"',
+          '      "owned_by": "glm",',
+          '      "context_length": 81920,',
+          '      "max_tokens": 81920,',
           '    },',
           '    {',
           '      "id": "moonshotai/kimi-latest",',
           '      "apiMode": "openai",',
-          '      "owned_by": "moonshot"',
+          '      "owned_by": "moonshot",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 384000,',
           '    },',
           '    {',
           '      "id": "minimax/minimax-latest",',
           '      "apiMode": "openai",',
-          '      "owned_by": "minimax"',
+          '      "owned_by": "minimax",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 131072,',
+          '    },',
+          '    {',
+          '      "id": "xiaomi/mimo-v2.5",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "xiaomi",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
+          '    },',
+          '    {',
+          '      "id": "xiaomi/mimo-v2.5-pro",',
+          '      "apiMode": "openai",',
+          '      "owned_by": "xiaomi",',
+          '      "context_length": 1000000,',
+          '      "max_tokens": 8192,',
           '    }',
           '  ]',
           '}',
@@ -311,6 +359,20 @@ function formatPeriod(start: string | null, end: string | null) {
   return `${startText} - ${endText}`
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.valueOf())) return value
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, {
     ...options,
@@ -330,6 +392,43 @@ function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
   const [activeGuideTab, setActiveGuideTab] = useState<GuideTab>('Claude Code')
+  const [feedbackInput, setFeedbackInput] = useState('')
+  const [feedbackList, setFeedbackList] = useState<FeedbackItem[]>([])
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
+  const [feedbackError, setFeedbackError] = useState<string | null>(null)
+
+  const loadFeedback = useCallback(async () => {
+    try {
+      const data = await fetchJson<FeedbackResponse>('/api/feedback')
+      setFeedbackList(data.items)
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : '加载反馈失败')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadFeedback()
+  }, [loadFeedback])
+
+  const handleSubmitFeedback = useCallback(async () => {
+    const content = feedbackInput.trim()
+    if (!content || feedbackSubmitting) return
+    setFeedbackSubmitting(true)
+    setFeedbackError(null)
+    try {
+      const data = await fetchJson<{ item: FeedbackItem }>('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      setFeedbackList((current) => [data.item, ...current.filter((item) => item.id !== data.item.id)])
+      setFeedbackInput('')
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : '提交反馈失败')
+    } finally {
+      setFeedbackSubmitting(false)
+    }
+  }, [feedbackInput, feedbackSubmitting])
 
   const loadDashboard = useCallback(async () => {
     setState({ status: 'loading', message: '正在同步席位用量' })
@@ -399,9 +498,12 @@ function App() {
       <main className="dashboard-main">
         <header className="topbar">
           <div>
-            <h1>火山方舟 Coding Plan 席位用量</h1>
+            <h1>奕行智能大模型API使用教程</h1>
           </div>
           <div className="topbar-actions">
+            <span className="version-badge" aria-label="页面更新版本日期">
+              更新于 2026-08-21
+            </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
             </button>
@@ -604,6 +706,55 @@ function App() {
               </table>
             </div>
           )}
+        </section>
+
+        <section className="panel feedback-panel" aria-label="问题反馈">
+          <div className="panel-title">
+            <h2>问题反馈</h2>
+          </div>
+
+          <div className="feedback-body">
+            <div className="feedback-form">
+              <label className="feedback-label" htmlFor="feedback-input">
+                遇到问题或有建议？告诉我们
+              </label>
+              <textarea
+                id="feedback-input"
+                className="feedback-textarea"
+                rows={4}
+                placeholder="请描述你遇到的问题或建议…"
+                value={feedbackInput}
+                onChange={(event) => setFeedbackInput(event.target.value)}
+              />
+              <div className="feedback-actions">
+                <span className="feedback-count">{feedbackInput.length} 字</span>
+                <button
+                  className="btn-primary feedback-submit"
+                  type="button"
+                  onClick={() => void handleSubmitFeedback()}
+                  disabled={!feedbackInput.trim() || feedbackSubmitting}
+                >
+                  {feedbackSubmitting ? '提交中…' : '提交反馈'}
+                </button>
+              </div>
+            </div>
+
+            {feedbackError && <p className="feedback-error">{feedbackError}</p>}
+            {feedbackList.length > 0 ? (
+              <ul className="feedback-list" aria-label="反馈列表">
+                {feedbackList.map((item) => (
+                  <li className="feedback-item" key={item.id}>
+                    <div className="feedback-item-meta">
+                      <span className="feedback-item-time">{formatDateTime(item.createdAt)}</span>
+                    </div>
+                    <p className="feedback-item-content">{item.content}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="feedback-empty">还没有反馈，提交第一条吧。</p>
+            )}
+          </div>
         </section>
       </main>
     </div>

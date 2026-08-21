@@ -15,6 +15,9 @@ dist-ssr
 !.env.example
 *.local
 
+# 问题反馈持久化数据
+data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
