@@ -12,6 +12,9 @@ type SeatRow = {
   usage5h: UsageValue
   usage7d: UsageValue
   usage30d: UsageValue
+  reset5h: string | null
+  reset7d: string | null
+  reset30d: string | null
   effectiveAt: string | null
   effectiveEndAt: string | null
   status: string | null
@@ -46,10 +49,24 @@ type LoadState =
 
 const usageKeys = ['usage5h', 'usage7d', 'usage30d'] as const
 
+const resetKeys: Record<(typeof usageKeys)[number], 'reset5h' | 'reset7d' | 'reset30d'> = {
+  usage5h: 'reset5h',
+  usage7d: 'reset7d',
+  usage30d: 'reset30d',
+}
+
 const usageWindowLabels: Record<(typeof usageKeys)[number], string> = {
   usage5h: '近5小时',
   usage7d: '近1周',
   usage30d: '近1月',
+}
+
+type UsageQuota = { token: string; request: string }
+
+const usageQuotas: Record<(typeof usageKeys)[number], UsageQuota> = {
+  usage5h: { token: '2亿', request: '6,000' },
+  usage7d: { token: '15亿', request: '45,000' },
+  usage30d: { token: '30亿', request: '90,000' },
 }
 
 const columnLabels: Record<(typeof usageKeys)[number], string> = {
@@ -82,13 +99,13 @@ const supportedModels = [
 ] as const
 
 const modelNotes: Record<string, string> = {
-  auto: 'ark-code-latest · 使用 Auto 模式，通过「效果 + 速度」双维度智能算法自动选择模型',
-  'deepseek/deepseek-v4-flash': 'deepseek-v4-flash',
-  'deepseek/deepseek-v4-pro': 'deepseek-v4-pro',
+  auto: '通过智能算法自动选择模型',
+  'deepseek/deepseek-v4-flash': 'deepseek-v4-flash正式版',
+  'deepseek/deepseek-v4-pro': 'deepseek-v4-pro正式版',
   'z-ai/glm-5.3': 'glm-5.3',
   'moonshotai/kimi-k2.7-code': 'kimi-k2.7-code',
   'minimax/minimax-m3': 'minimax-m3',
-  'deepseek/deepseek-latest': 'deepseek-v4-pro',
+  'deepseek/deepseek-latest': 'deepseek-v4-pro正式版',
   'z-ai/glm-latest': 'glm-5.3',
   'moonshotai/kimi-latest': 'kimi-k2.7-code',
   'minimax/minimax-latest': 'minimax-m3',
@@ -373,6 +390,32 @@ function formatDateTime(value: string) {
   })
 }
 
+function parseTimestamp(value: string | null): Date | null {
+  if (!value) return null
+  const normalized = /^\d+$/.test(value) && value.length <= 10 ? Number(value) * 1000 : value
+  const date = new Date(normalized)
+  return Number.isNaN(date.valueOf()) ? null : date
+}
+
+function formatResetTime(value: string | null): string {
+  const date = parseTimestamp(value)
+  if (!date) return '-'
+  const now = new Date()
+  const diffMs = date.valueOf() - now.valueOf()
+  if (diffMs <= 0) return '即将刷新'
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 60) return `${diffMins} 分钟后`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours} 小时后`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) {
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    return `${diffDays} 天后 ${hour}:${minute}`
+  }
+  return formatDay(value)
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, {
     ...options,
@@ -502,7 +545,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-08-21
+              更新于 2026-08-24
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
@@ -691,12 +734,17 @@ function App() {
                     <tr key={seat.seatId}>
                       <td>
                         <div className="seat-cell">
-                          <strong>{seat.seatId}</strong>
+                          <strong>{seat.displayName}</strong>
                         </div>
                       </td>
                       {usageKeys.map((key) => (
                         <td key={key}>
-                          <UsageDial percent={toPercent(seat[key])} label={usageWindowLabels[key]} />
+                          <UsageDial
+                            percent={toPercent(seat[key])}
+                            label={usageWindowLabels[key]}
+                            quota={usageQuotas[key]}
+                            resetAt={seat[resetKeys[key]]}
+                          />
                         </td>
                       ))}
                       <td className="time-cell">{formatPeriod(seat.effectiveAt, seat.effectiveEndAt)}</td>
@@ -815,7 +863,17 @@ function Metric({
   )
 }
 
-function UsageDial({ percent, label }: { percent: number | null; label: string }) {
+function UsageDial({
+  percent,
+  label,
+  quota,
+  resetAt,
+}: {
+  percent: number | null
+  label: string
+  quota?: UsageQuota
+  resetAt?: string | null
+}) {
   const value = percent ?? 0
   return (
     <div className="usage-dial" aria-label={`${label}用量：${percent === null ? '暂无数据' : `${percent}%`}`}>
@@ -825,7 +883,24 @@ function UsageDial({ percent, label }: { percent: number | null; label: string }
           {percent !== null && <small>%</small>}
         </span>
       </div>
-      <span className="usage-label">{label}</span>
+      <div className="usage-text-col">
+        <span className="usage-label">{label}</span>
+        {quota && (
+          <span className="usage-quota">
+            <span className="usage-quota-item">{quota.token} token</span>
+            <span className="usage-quota-sep">/</span>
+            <span className="usage-quota-item">{quota.request} 次请求</span>
+          </span>
+        )}
+        {resetAt && (
+          <span
+            className="usage-reset-time"
+            title={`下次刷新：${formatDateTime(/^\d+$/.test(resetAt) && resetAt.length <= 10 ? new Date(Number(resetAt) * 1000).toISOString() : resetAt)}`}
+          >
+            下次刷新：{formatResetTime(resetAt)}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

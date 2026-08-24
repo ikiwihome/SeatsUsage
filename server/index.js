@@ -237,7 +237,7 @@ function normalizeSeatInfo(item) {
   return {
     seatId,
     displayName:
-      stringValue(pickDeep(item, ['SeatName', 'DisplayName', 'UserName', 'Name', 'Email', 'AccountName'], 2)) ||
+      stringValue(pickDeep(item, ['IdentityDetail', 'SeatName', 'DisplayName', 'UserName', 'Name', 'Email', 'AccountName'], 2)) ||
       seatId ||
       '未命名席位',
     bizInfo: stringValue(pickDeep(item, ['BizInfo', 'Plan', 'Package', 'Edition'], 2)) || config.bizInfo,
@@ -310,6 +310,15 @@ function normalizeUsage(item) {
     effectiveEndAt: stringValue(
       pickDeep(item, ['ExpiredTime', 'ExpireTime', 'EndTime', 'MonthlyResetMilestone', 'ResetTime'], 4),
     ),
+    reset5h: stringValue(
+      pickDeep(item, ['ShortTermResetMilestone', 'Reset5H', 'FiveHourResetMilestone', 'ResetMilestone5H', 'NextReset5H'], 4),
+    ),
+    reset7d: stringValue(
+      pickDeep(item, ['WeeklyResetMilestone', 'Reset7D', 'WeekResetMilestone', 'ResetMilestone7D', 'NextReset7D'], 4),
+    ),
+    reset30d: stringValue(
+      pickDeep(item, ['MonthlyResetMilestone', 'Reset30D', 'MonthResetMilestone', 'ResetMilestone30D', 'NextReset30D'], 4),
+    ),
     raw: item,
   }
 }
@@ -351,7 +360,8 @@ async function getSeatsUsage() {
       PageNum: pageNum,
       PageSize: config.pageSize,
     })
-    const pageRows = extractRows(seatInfoPayload, ['SeatID', 'SeatId']).map(normalizeSeatInfo).filter((seat) => seat.seatId)
+    const rawRows = extractRows(seatInfoPayload, ['SeatID', 'SeatId'])
+    const pageRows = rawRows.map(normalizeSeatInfo).filter((seat) => seat.seatId)
     seatInfoRows.push(...pageRows)
     total = extractTotal(seatInfoPayload)
     if (pageRows.length < config.pageSize) break
@@ -382,10 +392,19 @@ async function getSeatsUsage() {
         usage5h: usage?.usage5h ?? null,
         usage7d: usage?.usage7d ?? null,
         usage30d: usage?.usage30d ?? null,
+        reset5h: usage?.reset5h ?? null,
+        reset7d: usage?.reset7d ?? null,
+        reset30d: usage?.reset30d ?? null,
         effectiveAt: usage?.effectiveAt || seat.effectiveAt,
         effectiveEndAt: usage?.effectiveEndAt || seat.effectiveEndAt,
         status: seat.status,
       }
+    })
+    .sort((a, b) => {
+      const numA = parseInt(a.displayName.replace(/\D/g, ''), 10)
+      const numB = parseInt(b.displayName.replace(/\D/g, ''), 10)
+      if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
+      return a.displayName.localeCompare(b.displayName)
     })
 
   return {

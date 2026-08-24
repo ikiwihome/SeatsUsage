@@ -1197,6 +1197,38 @@ td .time-window {
   white-space: nowrap;
 }
 
+.usage-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.usage-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.usage-quota-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-quota-sep {
+  opacity: 0.5;
+}
+
+.usage-reset-time {
+  color: var(--muted-2);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.75;
+  cursor: help;
+}
+
 .usage-text strong {
   display: block;
   color: var(--fg);
