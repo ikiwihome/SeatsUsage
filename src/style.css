@@ -1286,6 +1286,15 @@ td {
   white-space: nowrap;
 }
 
+/* 暂时不可用席位：任一窗口用量达 100% 时显示半透明红色底纹 */
+tr.seat-unavailable td {
+  background: rgba(255, 139, 139, 0.08);
+}
+
+tr.seat-unavailable:hover td {
+  background: rgba(255, 139, 139, 0.12);
+}
+
 .time-cell {
   color: var(--fg);
   font-weight: 650;

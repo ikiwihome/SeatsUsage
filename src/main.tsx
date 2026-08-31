@@ -414,6 +414,27 @@ function formatResetTime(value: string | null): string {
   return formatDay(value)
 }
 
+function isSeatUnavailable(seat: SeatRow) {
+  return usageKeys.some((key) => {
+    const value = toNumber(seat[key])
+    return value !== null && value >= 100
+  })
+}
+
+// 暂不可用席位的下次刷新时间：取达到 100% 的窗口中最早重置的时间
+function seatUnavailableResetText(seat: SeatRow): string {
+  const fullWindows = usageKeys.filter((key) => {
+    const value = toNumber(seat[key])
+    return value !== null && value >= 100
+  })
+  const resetTimes = fullWindows
+    .map((key) => parseTimestamp(seat[resetKeys[key]]))
+    .filter((date): date is Date => date !== null)
+  if (!resetTimes.length) return '时间未知'
+  const earliest = new Date(Math.min(...resetTimes.map((date) => date.valueOf())))
+  return formatResetTime(earliest.toISOString())
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, {
     ...options,
@@ -737,26 +758,33 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.data.seats.seats.map((seat) => (
-                    <tr key={seat.seatId}>
-                      <td>
-                        <div className="seat-cell">
-                          <strong>{seat.displayName}</strong>
-                        </div>
-                      </td>
-                      {usageKeys.map((key) => (
-                        <td key={key}>
-                          <UsageDial
-                            percent={toPercent(seat[key])}
-                            label={usageWindowLabels[key]}
-                            quota={usageQuotas[key]}
-                            resetAt={seat[resetKeys[key]]}
-                          />
+                  {state.data.seats.seats.map((seat) => {
+                    const unavailable = isSeatUnavailable(seat)
+                    return (
+                      <tr
+                        key={seat.seatId}
+                        className={unavailable ? 'seat-unavailable' : undefined}
+                        title={unavailable ? `该席位暂不可用，下次刷新${seatUnavailableResetText(seat)}` : undefined}
+                      >
+                        <td>
+                          <div className="seat-cell">
+                            <strong>{seat.displayName}</strong>
+                          </div>
                         </td>
-                      ))}
-                      <td className="time-cell">{formatPeriod(seat.effectiveAt, seat.effectiveEndAt)}</td>
-                    </tr>
-                  ))}
+                        {usageKeys.map((key) => (
+                          <td key={key}>
+                            <UsageDial
+                              percent={toPercent(seat[key])}
+                              label={usageWindowLabels[key]}
+                              quota={usageQuotas[key]}
+                              resetAt={seat[resetKeys[key]]}
+                            />
+                          </td>
+                        ))}
+                        <td className="time-cell">{formatPeriod(seat.effectiveAt, seat.effectiveEndAt)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
