@@ -87,7 +87,7 @@ const supportedModels = [
   'auto',
   'deepseek-v4-flash',
   'deepseek-v4-pro',
-  'glm-5.3',
+  'glm-5.3-flash',
   'kimi-k2.7-code',
   'minimax-m3',
   'deepseek-latest',
@@ -102,11 +102,11 @@ const modelNotes: Record<string, string> = {
   auto: '通过智能算法自动选择模型',
   'deepseek-v4-flash': 'deepseek-v4-flash正式版',
   'deepseek-v4-pro': 'deepseek-v4-pro正式版',
-  'glm-5.3': 'glm-5.3',
+  'glm-5.3-flash': 'glm-5.3-flash',
   'kimi-k2.7-code': 'kimi-k2.7-code',
   'minimax-m3': 'minimax-m3',
   'deepseek-latest': 'deepseek-v4-pro正式版',
-  'glm-latest': 'glm-5.3',
+  'glm-latest': 'glm-5.3-flash',
   'kimi-latest': 'kimi-k2.7-code',
   'minimax-latest': 'minimax-m3',
   'mimo-v2.5': 'mimo-v2.5',
@@ -265,9 +265,9 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      "max_tokens": 393216,',
           '    },',
           '    {',
-          '      "id": "glm-5.3",',
+          '      "id": "glm-5.3-flash",',
           '      "apiMode": "openai",',
-          '      "owned_by": "glm",',
+          '      "owned_by": "z-ai",',
           '      "context_length": 1000000,',
           '      "max_tokens": 65536,',
           '    },',
@@ -295,7 +295,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '    {',
           '      "id": "glm-latest",',
           '      "apiMode": "openai",',
-          '      "owned_by": "glm",',
+          '      "owned_by": "z-ai",',
           '      "context_length": 1000000,',
           '      "max_tokens": 65536,',
           '    },',
@@ -492,13 +492,22 @@ function App() {
     if (state.status !== 'ready') {
       return {
         seats: 0,
+        available: 0,
         usage5h: '-',
       }
     }
     const { seats } = state.data
+    const total = seats.seats.length
+    const available = seats.seats.filter((seat) =>
+      usageKeys.every((key) => {
+        const value = toNumber(seat[key])
+        return value === null || value < 100
+      }),
+    ).length
 
     return {
-      seats: seats.seats.length,
+      seats: total,
+      available,
       usage5h: formatAverage(seats.seats, 'usage5h'),
     }
   }, [state])
@@ -552,7 +561,7 @@ function App() {
         </header>
 
         <section className="kpis" aria-label="用量概览">
-          <Metric className="kpi-summary" label="有效席位" value={summary.seats} />
+          <Metric className="kpi-summary" label="可用席位" value={`${summary.available} / ${summary.seats}`} />
           <Metric className="kpi-summary" label="平均近5小时" value={summary.usage5h} />
           <div className="access-stack" aria-label="BaseURL 接入方式">
             {accessMethods.slice(0, 2).map((item) => (
