@@ -573,7 +573,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-08-24
+              更新于 2026-08-31
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
