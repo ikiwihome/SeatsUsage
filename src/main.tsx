@@ -174,7 +174,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
         lines: ['Windows: %USERPROFILE%/.codex/config.toml', 'Linux: ~/.codex/config.toml'],
       },
       {
-        title: 'config.toml 示例',
+        title: '1. 修改config.toml，在文件头部添加如下配置',
         code: [
           'model = "auto"',
           'model_provider = "evas"',
@@ -183,12 +183,13 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '[model_providers.evas]',
           'name = "EVAS"',
           `base_url = "${accessMethods[0].value}"`,
-          'env_key = "OPENAI_API_KEY"',
+          'requires_openai_auth = true',
           'wire_api = "responses"',
         ].join('\n'),
       },
       {
-        title: 'API Key 环境变量',
+        title: '2. 在系统环境变量中添加 OPENAI_API_KEY',
+        description: 'Windows PowerShell 使用第一条命令，Linux / Bash 使用第二条命令',
         code: ['$env:OPENAI_API_KEY="你创建的API Key"', 'export OPENAI_API_KEY="你创建的API Key"'].join('\n'),
       },
     ],
