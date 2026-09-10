@@ -262,6 +262,7 @@ function normalizeSeatInfo(item) {
       pickDeep(item, ['ExpiredTime', 'ExpireTime', 'EndTime', 'MonthlyResetMilestone', 'ResetTime'], 3),
     ),
     status: stringValue(pickDeep(item, ['Status', 'SeatStatus', 'State'], 2)),
+    billingStatus: stringValue(pickDeep(item, ['BillingStatus', 'BillingState', 'BillStatus', 'PaymentStatus'], 2)),
     raw: item,
   }
 }
@@ -348,6 +349,16 @@ function chunk(values, size) {
   return result
 }
 
+function isSeatActive(seat) {
+  // 计费状态为 4 表示席位已失效/未续费
+  if (seat.billingStatus === '4') return false
+  // 有明确的到期时间且已过期则视为失效
+  const expire = seat.effectiveEndAt ? Number(seat.effectiveEndAt) : NaN
+  if (Number.isFinite(expire) && expire > 0 && expire * 1000 < Date.now()) return false
+  // 其余仅接受状态为 2 的席位
+  return seat.status === '2'
+}
+
 async function getSeatsUsage() {
   const seatInfoRows = []
   let pageNum = 1
@@ -381,7 +392,7 @@ async function getSeatsUsage() {
 
   const usageBySeatId = new Map(usageRows.filter((usage) => usage.seatId).map((usage) => [usage.seatId, usage]))
   const seats = seatInfoRows
-    .filter((seat) => seat.status === '2')
+    .filter(isSeatActive)
     .map((seat) => {
       const usage = usageBySeatId.get(seat.seatId)
       return {
@@ -398,6 +409,7 @@ async function getSeatsUsage() {
         effectiveAt: usage?.effectiveAt || seat.effectiveAt,
         effectiveEndAt: usage?.effectiveEndAt || seat.effectiveEndAt,
         status: seat.status,
+        billingStatus: seat.billingStatus,
       }
     })
     .sort((a, b) => {

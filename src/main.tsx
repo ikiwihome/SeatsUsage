@@ -78,7 +78,7 @@ const columnLabels: Record<(typeof usageKeys)[number], string> = {
 const accessMethods = [
   { label: 'OpenAI BaseURL', value: 'https://api.evas.ai/v1' },
   { label: 'Anthropic BaseURL', value: 'https://api.evas.ai' },
-  { label: '注册地址', value: 'https://api.evas.ai/login' },
+  { label: '注册地址', value: 'https://api.evas.ai/register' },
 ] as const
 
 const compatibleProtocols = ['OpenAI Chat Completions', 'OpenAI Responses', 'Anthropic Messages'] as const
@@ -573,7 +573,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-08-31
+              更新于 2026-09-10
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
