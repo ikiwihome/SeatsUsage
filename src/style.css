@@ -112,6 +112,12 @@ button {
   line-height: 1.08;
 }
 
+.topbar-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

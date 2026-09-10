@@ -569,7 +569,8 @@ function App() {
       <main className="dashboard-main">
         <header className="topbar">
           <div>
-            <h1>奕行智能大模型API使用教程</h1>
+            <h1>大模型 API 服务平台接入教程</h1>
+            <p className="topbar-subtitle">仅适用于公司内网使用</p>
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
