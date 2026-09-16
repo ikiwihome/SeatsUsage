@@ -183,7 +183,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '[model_providers.evas]',
           'name = "EVAS"',
           `base_url = "${accessMethods[0].value}"`,
-          'requires_openai_auth = true',
+          'env_key = "OPENAI_API_KEY"',
           'wire_api = "responses"',
         ].join('\n'),
       },
