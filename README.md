@@ -1,10 +1,11 @@
 # SeatsUsage
 
-一个面向火山方舟 Coding Plan 的本地席位用量看板。项目使用 React + Vite 构建前端，使用 Express 作为本地 API 代理，负责签名调用火山方舟 OpenAPI，汇总有效席位的近 5 小时、近 7 天、近 30 天用量，并提供协议兼容性测试与接入指引页面。
+一个面向火山方舟 Coding Plan 与 Agent Plan 的本地席位用量看板。项目使用 React + Vite 构建前端，使用 Express 作为本地 API 代理，负责签名调用火山方舟 OpenAPI，汇总有效席位的近 5 小时、近 7 天、近 30 天用量，并提供协议兼容性测试与接入指引页面。
 
 ## Overview
 
 - 查询火山方舟 Coding Plan Pro 席位，并展示当前有效席位
+- 查询火山方舟 Agent Plan 企业版席位，展示 AFP 额度用量
 - 聚合展示 5 小时、7 天、30 天三个时间窗口的用量
 - 通过本地服务代理 OpenAPI 请求，避免 AK/SK 直接进入浏览器
 - 内置 OpenAI / Anthropic 兼容协议探测
@@ -15,10 +16,11 @@
 
 ### 1. 席位用量看板
 
-- 自动拉取席位列表与席位用量
+- 自动拉取席位列表与席位用量，按 Coding Plan / Agent Plan 分区展示
 - 仅展示状态为有效的席位
 - 使用环形刻度展示不同时间窗口的占用比例
 - 展示套餐生效时间区间
+- Coding Plan 区块展示档位与每档 token / 请求额度，Agent Plan 区块展示场景、AFP 总额度与已用量
 
 ### 2. 协议可用性测试
 
@@ -130,6 +132,8 @@ npm run preview
 | ARK_BIZ_INFO | Pro | 席位档位过滤条件 |
 | ARK_PAGE_SIZE | 1000 | ListSeatInfos 分页大小 |
 | ARK_USAGE_BATCH_SIZE | 1000 | ListSeatInfoUsages 的 SeatIDs 批量大小 |
+| ARK_AGENT_SCENE | agent_plan_enterprise | Agent Plan 席位在 ListSeatInfos 中的 Scene 过滤值 |
+| ARK_AGENT_USAGE_PAGE_SIZE | 100 | ListSeatAFPUsage 分页大小，自动收敛到 10-100 |
 | PORT | 8787 | 本地 Express 服务端口 |
 
 后端同时兼容多组凭据别名：
@@ -144,7 +148,8 @@ npm run preview
 flowchart LR
 	A[React Dashboard] -->|GET /api/seats| B[Express API]
 	B -->|ListSeatInfos| C[ARK OpenAPI]
-	B -->|ListSeatInfoUsages| C
+	B -->|ListSeatInfoUsages, Coding Plan| C
+	B -->|ListSeatAFPUsage, Agent Plan| C
 	C --> B
 	B --> A
 	A -->|POST /api/protocol-tests| B
@@ -158,10 +163,11 @@ flowchart LR
 ### 席位查询
 
 1. 前端请求 `/api/seats`
-2. 后端调用 `ListSeatInfos`，按 `ProjectName` 与 `BizInfo` 过滤并自动翻页
-3. 后端提取全部 `SeatID`，分批调用 `ListSeatInfoUsages`
-4. 后端合并席位信息与用量信息，只返回前端需要的字段
-5. 前端渲染席位表格、概览指标和生效时间
+2. 后端调用 `ListSeatInfos`，按 `ProjectName` 与 `BizInfo` 过滤并自动翻页，得到 Coding Plan 席位
+3. 后端提取全部 `SeatID`，分批调用 `ListSeatInfoUsages` 获取 Coding Plan 用量
+4. 后端再以 `Scene=ARK_AGENT_SCENE` 调用 `ListSeatInfos` 得到 Agent Plan 席位，并通过 `ListSeatAFPUsage` 按页获取 AFP 额度用量
+5. 后端合并两路席位信息与用量信息，只返回前端需要的字段；Agent Plan 请求失败时只回报错误，不影响 Coding Plan 数据
+6. 前端分别渲染 Coding Plan / Agent Plan 席位表格、概览指标和生效时间
 
 ### 协议探测
 
@@ -189,11 +195,16 @@ flowchart LR
 
 响应字段包括：
 
-- seats: 席位数组
+- seats: Coding Plan 席位数组
 - fetchedAt: 后端拉取时间
 - projectName: 当前项目名
 - bizInfo: 当前档位过滤值
 - rawSeatCount: 原始返回席位数
+- agentSeats: Agent Plan 席位数组（包含 AFP 额度与已用量）
+- agentFetchedAt: Agent Plan 用量拉取时间
+- agentRawSeatCount: Agent Plan 原始返回席位数
+- agentScene: 当前 Agent Plan 场景过滤值
+- agentError: Agent Plan 拉取失败时的错误信息，成功时为 null
 
 ### POST /api/protocol-tests
 

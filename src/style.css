@@ -633,6 +633,7 @@ td .time-window {
 }
 
 .model-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -719,6 +720,35 @@ td .time-window {
   line-height: 1.3;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.model-card-side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-card-badge {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: inline-grid;
+  min-width: 22px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(122, 231, 168, 0.42);
+  border-radius: 999px;
+  padding: 0 6px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(122, 231, 168, 0.24), rgba(122, 231, 168, 0.08));
+  color: #baf7cf;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .unified-card .model-id {
@@ -1263,6 +1293,59 @@ td .time-window {
   border: 1px solid var(--soft-border);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.018);
+}
+
+/* 席位面板内按套餐（Coding Plan / Agent Plan）分区展示 */
+.seat-plan-block {
+  margin-top: 18px;
+}
+
+.seat-plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 20px;
+}
+
+.seat-plan-header h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.seat-plan-description {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.seat-plan-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.seat-plan-stat {
+  padding: 6px 12px;
+  border: 1px solid var(--soft-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.seat-plan-stat strong {
+  color: var(--fg);
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+}
+
+.seat-plan-block .table-wrap {
+  margin-top: 14px;
 }
 
 table {

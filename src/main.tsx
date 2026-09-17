@@ -4,14 +4,23 @@ import './style.css'
 
 type UsageValue = number | string | null
 
+type QuotaInfo = {
+  quota: number | null
+  used: number | null
+}
+
+type SeatQuotas = Record<'usage5h' | 'usage7d' | 'usage30d', QuotaInfo | null>
+
 type SeatRow = {
   seatId: string
   displayName: string
   bizInfo: string
+  planType?: string | null
   projectName: string
   usage5h: UsageValue
   usage7d: UsageValue
   usage30d: UsageValue
+  quotas?: SeatQuotas | null
   reset5h: string | null
   reset7d: string | null
   reset30d: string | null
@@ -26,6 +35,11 @@ type SeatsResponse = {
   projectName: string
   bizInfo: string
   rawSeatCount: number
+  agentSeats?: SeatRow[]
+  agentFetchedAt?: string
+  agentRawSeatCount?: number
+  agentScene?: string
+  agentError?: string | null
 }
 
 type DashboardData = {
@@ -49,13 +63,15 @@ type LoadState =
 
 const usageKeys = ['usage5h', 'usage7d', 'usage30d'] as const
 
-const resetKeys: Record<(typeof usageKeys)[number], 'reset5h' | 'reset7d' | 'reset30d'> = {
+type UsageKey = (typeof usageKeys)[number]
+
+const resetKeys: Record<UsageKey, 'reset5h' | 'reset7d' | 'reset30d'> = {
   usage5h: 'reset5h',
   usage7d: 'reset7d',
   usage30d: 'reset30d',
 }
 
-const usageWindowLabels: Record<(typeof usageKeys)[number], string> = {
+const usageWindowLabels: Record<UsageKey, string> = {
   usage5h: '近5小时',
   usage7d: '近1周',
   usage30d: '近1月',
@@ -63,13 +79,14 @@ const usageWindowLabels: Record<(typeof usageKeys)[number], string> = {
 
 type UsageQuota = { token: string; request: string }
 
-const usageQuotas: Record<(typeof usageKeys)[number], UsageQuota> = {
+// Coding Plan 各窗口的固定配额（CodingPlan 后端只返回百分比，不返回配额）。
+const usageQuotas: Record<UsageKey, UsageQuota> = {
   usage5h: { token: '2 亿', request: '6,000' },
   usage7d: { token: '15 亿', request: '45,000' },
   usage30d: { token: '30 亿', request: '90,000' },
 }
 
-const columnLabels: Record<(typeof usageKeys)[number], string> = {
+const columnLabels: Record<UsageKey, string> = {
   usage5h: '5小时用量',
   usage7d: '近一周用量',
   usage30d: '近一月用量',
@@ -86,7 +103,7 @@ const compatibleProtocols = ['OpenAI Chat Completions', 'OpenAI Responses', 'Ant
 const supportedModels = [
   'auto',
   'deepseek-v4-flash',
-  'deepseek-v4-pro',
+  'deepseek-v4.1-flash',
   'glm-5.3-flash',
   'kimi-k2.7-code',
   'minimax-m3',
@@ -101,16 +118,21 @@ const supportedModels = [
 const modelNotes: Record<string, string> = {
   auto: '通过智能算法自动选择模型',
   'deepseek-v4-flash': 'deepseek-v4-flash正式版',
-  'deepseek-v4-pro': 'deepseek-v4-pro正式版',
+  'deepseek-v4.1-flash': 'deepseek-v4.1-flash',
   'glm-5.3-flash': 'glm-5.3-flash',
   'kimi-k2.7-code': 'kimi-k2.7-code',
   'minimax-m3': 'minimax-m3',
-  'deepseek-latest': 'deepseek-v4-pro正式版',
+  'deepseek-latest': 'deepseek-v4.1-flash',
   'glm-latest': 'glm-5.3-flash',
   'kimi-latest': 'kimi-k2.7-code',
   'minimax-latest': 'minimax-m3',
   'mimo-v2.5': 'mimo-v2.5',
   'mimo-v2.5-pro': 'mimo-v2.5-pro',
+}
+
+// 模型卡片右上角角标，用于标记新上线的模型。
+const modelBadges: Record<string, string> = {
+  'deepseek-v4.1-flash': '新',
 }
 
 const guideTabs = ['Claude Code', 'Codex', 'OpenCode', 'VS Code Copilot'] as const
@@ -135,8 +157,8 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           `$env:ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
           `$env:ANTHROPIC_AUTH_TOKEN="你创建的API Key"`,
           '$env:ANTHROPIC_MODEL="auto"',
-          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="glm-latest"',
-          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-pro"',
+          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"',
+          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"',
           '$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"',
           '$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"',
           '$env:ANTHROPIC_API_KEY=""',
@@ -152,8 +174,8 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           `export ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
           `export ANTHROPIC_AUTH_TOKEN="你创建的API Key"`,
           'export ANTHROPIC_MODEL="auto"',
-          'export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-latest"',
-          'export ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-pro"',
+          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"',
+          'export ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"',
           'export ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"',
           'export CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"',
           'export ANTHROPIC_API_KEY=""',
@@ -259,7 +281,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      "max_tokens": 393216,',
           '    },',
           '    {',
-          '      "id": "deepseek-v4-pro",',
+          '      "id": "deepseek-v4.1-flash",',
           '      "apiMode": "openai",',
           '      "owned_by": "deepseek",',
           '      "context_length": 1000000,',
@@ -345,14 +367,46 @@ function toNumber(value: UsageValue) {
 function toPercent(value: UsageValue) {
   const number = toNumber(value)
   if (number === null) return null
-  return Math.max(0, Math.min(100, Math.floor(number)))
+  return Math.max(0, Math.min(100, number))
 }
 
-function formatAverage(seats: SeatRow[], key: (typeof usageKeys)[number]) {
+// AgentPlan 的 AFP 用量占比很小（百分之几），整数化后几乎全是 0，
+// 因此小于 1% 的区间保留一位小数；CodingPlan 传进来就是整数，不受影响。
+function formatPercent(percent: number) {
+  if (percent === 0 || percent >= 1) return String(Math.floor(percent))
+  return percent.toFixed(1)
+}
+
+function formatAverage(seats: SeatRow[], key: UsageKey) {
   const values = seats.map((seat) => toNumber(seat[key])).filter((value): value is number => value !== null)
   if (!values.length) return '-'
   const average = values.reduce((sum, value) => sum + value, 0) / values.length
-  return `${Math.floor(average)}%`
+  return `${formatPercent(average)}%`
+}
+
+function countAvailable(seats: SeatRow[]) {
+  return seats.filter((seat) => usageKeys.every((key) => {
+    const value = toNumber(seat[key])
+    return value === null || value < 100
+  })).length
+}
+
+function formatAmount(value: number | null, digits = 0) {
+  if (value === null || !Number.isFinite(value)) return '-'
+  return value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: digits })
+}
+
+// Coding Plan 使用固定配额文案；Agent Plan 每个席位配额由接口返回，展示"已用 / 配额"。
+function codingQuotaItems(key: UsageKey): readonly string[] {
+  const quota = usageQuotas[key]
+  return [`${quota.token} token`, `${quota.request} 次请求`]
+}
+
+function agentQuotaItems(seat: SeatRow, key: UsageKey): readonly string[] {
+  const info = seat.quotas?.[key]
+  if (!info || info.quota === null) return ['额度未下发']
+  if (info.used === null) return [`${formatAmount(info.quota)} AFP`]
+  return [`已用 ${formatAmount(info.used, 1)}`, `${formatAmount(info.quota)} AFP`]
 }
 
 function formatDay(value: string | null) {
@@ -516,21 +570,24 @@ function App() {
         seats: 0,
         available: 0,
         usage5h: '-',
+        codingSeats: 0,
+        codingAvailable: 0,
+        agentSeats: 0,
+        agentAvailable: 0,
       }
     }
     const { seats } = state.data
-    const total = seats.seats.length
-    const available = seats.seats.filter((seat) =>
-      usageKeys.every((key) => {
-        const value = toNumber(seat[key])
-        return value === null || value < 100
-      }),
-    ).length
+    const agentSeats = seats.agentSeats ?? []
+    const allSeats = [...seats.seats, ...agentSeats]
 
     return {
-      seats: total,
-      available,
-      usage5h: formatAverage(seats.seats, 'usage5h'),
+      seats: allSeats.length,
+      available: countAvailable(allSeats),
+      usage5h: formatAverage(allSeats, 'usage5h'),
+      codingSeats: seats.seats.length,
+      codingAvailable: countAvailable(seats.seats),
+      agentSeats: agentSeats.length,
+      agentAvailable: countAvailable(agentSeats),
     }
   }, [state])
 
@@ -575,7 +632,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-09-10
+              更新于 2026-09-17
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
@@ -584,7 +641,11 @@ function App() {
         </header>
 
         <section className="kpis" aria-label="用量概览">
-          <Metric className="kpi-summary" label="可用席位" value={`${summary.available} / ${summary.seats}`} />
+          <Metric
+            className="kpi-summary"
+            label="可用席位"
+            value={`${summary.available} / ${summary.seats}`}
+          />
           <Metric className="kpi-summary" label="平均近5小时" value={summary.usage5h} />
           <div className="access-stack" aria-label="BaseURL 接入方式">
             {accessMethods.slice(0, 2).map((item) => (
@@ -673,14 +734,21 @@ function App() {
                     <strong className="model-card-name">{model}</strong>
                     {modelNotes[model] && <span className="model-card-note">{modelNotes[model]}</span>}
                   </div>
-                  <CopyButton
-                    copied={copiedValue === model}
-                    label={`复制${model}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void copyText(model)
-                    }}
-                  />
+                  <div className="model-card-side">
+                    {modelBadges[model] && (
+                      <span className="model-card-badge" aria-label="新模型">
+                        {modelBadges[model]}
+                      </span>
+                    )}
+                    <CopyButton
+                      copied={copiedValue === model}
+                      label={`复制${model}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void copyText(model)
+                      }}
+                    />
+                  </div>
                 </div>
               </article>
             ))}
@@ -744,52 +812,24 @@ function App() {
 
           {state.status === 'loading' && <StatusBlock title="正在加载" detail={state.message || '正在读取火山方舟席位接口'} />}
           {state.status === 'error' && <StatusBlock title="加载失败" detail={state.message} tone="danger" />}
-          {state.status === 'ready' && state.data.seats.seats.length === 0 && (
-            <StatusBlock title="暂无席位" detail="ListSeatInfos 没有返回有效的 Pro 档位席位。" />
-          )}
-          {state.status === 'ready' && state.data.seats.seats.length > 0 && (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>席位/ID</th>
-                    {usageKeys.map((key) => (
-                      <th key={key}>{columnLabels[key]}</th>
-                    ))}
-                    <th>套餐生效时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.data.seats.seats.map((seat) => {
-                    const unavailable = isSeatUnavailable(seat)
-                    return (
-                      <tr
-                        key={seat.seatId}
-                        className={unavailable ? 'seat-unavailable' : undefined}
-                        title={unavailable ? `该席位暂不可用，下次刷新${seatUnavailableResetText(seat)}` : undefined}
-                      >
-                        <td>
-                          <div className="seat-cell">
-                            <strong>{seat.displayName}</strong>
-                          </div>
-                        </td>
-                        {usageKeys.map((key) => (
-                          <td key={key}>
-                            <UsageDial
-                              percent={toPercent(seat[key])}
-                              label={usageWindowLabels[key]}
-                              quota={usageQuotas[key]}
-                              resetAt={seat[resetKeys[key]]}
-                            />
-                          </td>
-                        ))}
-                        <td className="time-cell">{formatPeriod(seat.effectiveAt, seat.effectiveEndAt)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {state.status === 'ready' && (
+            <>
+              <SeatPlanBlock
+                title="Coding Plan"
+                description={`火山方舟 Coding Plan 团队版席位 · 档位 ${state.data.seats.bizInfo || '-'}`}
+                seats={state.data.seats.seats}
+                quotaItems={(_seat, key) => codingQuotaItems(key)}
+                emptyText="ListSeatInfos 没有返回有效的 Pro 档位席位。"
+              />
+              <SeatPlanBlock
+                title="Agent Plan"
+                description={`火山方舟 Agent Plan 团队版席位 · 场景 ${state.data.seats.agentScene || '-'}`}
+                seats={state.data.seats.agentSeats ?? []}
+                quotaItems={agentQuotaItems}
+                emptyText="ListSeatInfos 没有返回有效的 Agent Plan 席位。"
+                error={state.data.seats.agentError}
+              />
+            </>
           )}
         </section>
 
@@ -883,12 +923,14 @@ function Metric({
   label,
   value,
   delta,
+  hint,
   tone = 'neutral',
 }: {
   className?: string
   label: string
   value: React.ReactNode
   delta?: string
+  hint?: React.ReactNode
   tone?: 'neutral' | 'up'
 }) {
   return (
@@ -896,37 +938,125 @@ function Metric({
       <div className="label">{label}</div>
       <div className="value">{value}</div>
       {delta && <div className={`delta ${tone}`}>{delta}</div>}
+      {hint && <div className="hint">{hint}</div>}
     </article>
+  )
+}
+
+function SeatPlanBlock({
+  title,
+  description,
+  seats,
+  quotaItems,
+  emptyText,
+  error,
+}: {
+  title: string
+  description: string
+  seats: SeatRow[]
+  quotaItems: (seat: SeatRow, key: UsageKey) => readonly string[]
+  emptyText: string
+  error?: string | null
+}) {
+  const available = countAvailable(seats)
+
+  return (
+    <section className="seat-plan-block" aria-label={`${title} 席位用量`}>
+      <div className="seat-plan-header">
+        <div>
+          <h3>{title}</h3>
+          <p className="seat-plan-description">{description}</p>
+        </div>
+        <div className="seat-plan-stats">
+          <span className="seat-plan-stat">
+            可用席位 <strong>{available}</strong> / {seats.length}
+          </span>
+          <span className="seat-plan-stat">
+            平均近5小时 <strong>{formatAverage(seats, 'usage5h')}</strong>
+          </span>
+        </div>
+      </div>
+
+      {error && <StatusBlock title="Agent Plan 数据获取失败" detail={error} tone="danger" />}
+      {!error && seats.length === 0 && <StatusBlock title="暂无席位" detail={emptyText} />}
+      {seats.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>席位/ID</th>
+                {usageKeys.map((key) => (
+                  <th key={key}>{columnLabels[key]}</th>
+                ))}
+                <th>套餐生效时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seats.map((seat) => {
+                const unavailable = isSeatUnavailable(seat)
+                return (
+                  <tr
+                    key={seat.seatId}
+                    className={unavailable ? 'seat-unavailable' : undefined}
+                    title={unavailable ? `该席位暂不可用，下次刷新${seatUnavailableResetText(seat)}` : undefined}
+                  >
+                    <td>
+                      <div className="seat-cell">
+                        <strong>{seat.displayName}</strong>
+                      </div>
+                    </td>
+                    {usageKeys.map((key) => (
+                      <td key={key}>
+                        <UsageDial
+                          percent={toPercent(seat[key])}
+                          label={usageWindowLabels[key]}
+                          quotaItems={quotaItems(seat, key)}
+                          resetAt={seat[resetKeys[key]]}
+                        />
+                      </td>
+                    ))}
+                    <td className="time-cell">{formatPeriod(seat.effectiveAt, seat.effectiveEndAt)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 
 function UsageDial({
   percent,
   label,
-  quota,
+  quotaItems,
   resetAt,
 }: {
   percent: number | null
   label: string
-  quota?: UsageQuota
+  quotaItems?: readonly string[]
   resetAt?: string | null
 }) {
   const value = percent ?? 0
   return (
-    <div className="usage-dial" aria-label={`${label}用量：${percent === null ? '暂无数据' : `${percent}%`}`}>
+    <div className="usage-dial" aria-label={`${label}用量：${percent === null ? '暂无数据' : `${formatPercent(percent)}%`}`}>
       <div className="usage-ring" style={{ '--percent': value } as React.CSSProperties}>
         <span className="usage-ring-value">
-          {percent === null ? '-' : percent}
+          {percent === null ? '-' : formatPercent(percent)}
           {percent !== null && <small>%</small>}
         </span>
       </div>
       <div className="usage-text-col">
         <span className="usage-label">{label}</span>
-        {quota && (
+        {quotaItems && quotaItems.length > 0 && (
           <span className="usage-quota">
-            <span className="usage-quota-item">{quota.token} token</span>
-            <span className="usage-quota-sep">/</span>
-            <span className="usage-quota-item">{quota.request} 次请求</span>
+            {quotaItems.map((item, index) => (
+              <span key={item} className="usage-quota-part">
+                {index > 0 && <span className="usage-quota-sep">/</span>}
+                <span className="usage-quota-item">{item}</span>
+              </span>
+            ))}
           </span>
         )}
         {resetAt && (

@@ -19,6 +19,10 @@ const config = {
   bizInfo: process.env.ARK_BIZ_INFO || 'Pro',
   pageSize: Number(process.env.ARK_PAGE_SIZE || 1000),
   usageBatchSize: Number(process.env.ARK_USAGE_BATCH_SIZE || 1000),
+  // AgentPlan 团队版席位所属场景；ListSeatInfos 用它区分 CodingPlan 席位。
+  agentScene: process.env.ARK_AGENT_SCENE || 'agent_plan_enterprise',
+  // ListSeatAFPUsage 为 page-based 分页，后端约束 PageSize 在 10-100 之间。
+  agentUsagePageSize: Math.min(Math.max(Number(process.env.ARK_AGENT_USAGE_PAGE_SIZE || 100), 10), 100),
   accessKeyId:
     process.env.VOLCENGINE_ACCESS_KEY_ID ||
     process.env.VOLCENGINE_ACCESS_KEY ||
@@ -324,6 +328,37 @@ function normalizeUsage(item) {
   }
 }
 
+// AgentPlan 团队版席位用量走独立的 AFP（Agent Free Points）额度接口，
+// 每个窗口返回 Quota / Used / ResetTime，百分比由 used / quota 计算。
+function normalizeAfpWindow(item, aliases) {
+  const window = pickDeep(item, aliases, 2)
+  if (!window || typeof window !== 'object') return null
+  const quota = numberOrNull(pickDeep(window, ['Quota', 'Total'], 1))
+  const used = numberOrNull(pickDeep(window, ['Used'], 1))
+  return {
+    quota,
+    used,
+    percent: quota && quota > 0 && used !== null ? (used / quota) * 100 : null,
+    resetAt: toEpochSecondsText(pickDeep(window, ['ResetTime', 'ResetAt'], 1)),
+  }
+}
+
+function normalizeAfpUsage(item) {
+  return {
+    seatId: extractSeatId(item),
+    planType: stringValue(pickDeep(item, ['PlanType', 'BizInfo'], 2)),
+    fiveHour: normalizeAfpWindow(item, ['AFPFiveHour', 'FiveHour']),
+    daily: normalizeAfpWindow(item, ['AFPDaily', 'Daily']),
+    weekly: normalizeAfpWindow(item, ['AFPWeekly', 'Weekly']),
+    monthly: normalizeAfpWindow(item, ['AFPMonthly', 'Monthly']),
+  }
+}
+
+function toQuotaInfo(window) {
+  if (!window) return null
+  return { quota: window.quota, used: window.used }
+}
+
 function stringValue(value) {
   if (value === null || value === undefined || value === '') return null
   return String(value)
@@ -338,6 +373,21 @@ function numericOrString(value) {
 function numericValue(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
+}
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+// AFP 接口返回毫秒时间戳，统一转成秒（与 CodingPlan 的 ResetTime 口径一致），
+// 便于前端用同一套 formatResetTime / formatPeriod 处理。
+// -1 / 0 表示当前窗口还没有重置时间。
+function toEpochSecondsText(value) {
+  const number = numberOrNull(value)
+  if (number === null || number <= 0) return null
+  return String(Math.trunc(number / 1000))
 }
 
 function chunk(values, size) {
@@ -359,36 +409,75 @@ function isSeatActive(seat) {
   return seat.status === '2'
 }
 
-async function getSeatsUsage() {
-  const seatInfoRows = []
+async function listSeatInfos({ scene = null, filter = {} } = {}) {
+  const rows = []
   let pageNum = 1
   let total = null
 
   do {
-    const seatInfoPayload = await callArk('ListSeatInfos', {
-      Filter: { BizInfo: config.bizInfo },
+    const payload = await callArk('ListSeatInfos', {
+      Filter: filter,
       ProjectName: config.projectName,
+      ...(scene ? { Scene: scene } : {}),
       PageNum: pageNum,
       PageSize: config.pageSize,
     })
-    const rawRows = extractRows(seatInfoPayload, ['SeatID', 'SeatId'])
-    const pageRows = rawRows.map(normalizeSeatInfo).filter((seat) => seat.seatId)
-    seatInfoRows.push(...pageRows)
-    total = extractTotal(seatInfoPayload)
+    const pageRows = extractRows(payload, ['SeatID', 'SeatId'])
+      .map(normalizeSeatInfo)
+      .filter((seat) => seat.seatId)
+    rows.push(...pageRows)
+    total = extractTotal(payload)
     if (pageRows.length < config.pageSize) break
     pageNum += 1
-  } while (!total || seatInfoRows.length < total)
+  } while (!total || rows.length < total)
 
-  const seatIds = [...new Set(seatInfoRows.map((seat) => seat.seatId))]
-  const usageRows = []
+  return rows
+}
 
+async function listSeatUsages(seatIds) {
+  const rows = []
   for (const seatIdGroup of chunk(seatIds, config.usageBatchSize)) {
-    const usagePayload = await callArk('ListSeatInfoUsages', {
+    const payload = await callArk('ListSeatInfoUsages', {
       ProjectName: config.projectName,
       SeatIDs: seatIdGroup,
     })
-    usageRows.push(...extractRows(usagePayload, ['SeatID', 'SeatId']).map(normalizeUsage))
+    rows.push(...extractRows(payload, ['SeatID', 'SeatId']).map(normalizeUsage))
   }
+  return rows
+}
+
+async function listSeatAfpUsages() {
+  const rows = []
+  let pageNumber = 1
+  let total = null
+
+  do {
+    const payload = await callArk('ListSeatAFPUsage', {
+      ProjectName: config.projectName,
+      PageNumber: pageNumber,
+      PageSize: config.agentUsagePageSize,
+    })
+    const pageRows = extractRows(payload, ['SeatID', 'SeatId']).map(normalizeAfpUsage)
+    rows.push(...pageRows)
+    total = extractTotal(payload)
+    if (pageRows.length < config.agentUsagePageSize) break
+    pageNumber += 1
+  } while (!total || rows.length < total)
+
+  return rows
+}
+
+function compareSeats(a, b) {
+  const numA = parseInt(a.displayName.replace(/\D/g, ''), 10)
+  const numB = parseInt(b.displayName.replace(/\D/g, ''), 10)
+  if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
+  return a.displayName.localeCompare(b.displayName)
+}
+
+async function getCodingSeatsUsage() {
+  const seatInfoRows = await listSeatInfos({ filter: { BizInfo: config.bizInfo } })
+  const seatIds = [...new Set(seatInfoRows.map((seat) => seat.seatId))]
+  const usageRows = await listSeatUsages(seatIds)
 
   const usageBySeatId = new Map(usageRows.filter((usage) => usage.seatId).map((usage) => [usage.seatId, usage]))
   const seats = seatInfoRows
@@ -412,12 +501,7 @@ async function getSeatsUsage() {
         billingStatus: seat.billingStatus,
       }
     })
-    .sort((a, b) => {
-      const numA = parseInt(a.displayName.replace(/\D/g, ''), 10)
-      const numB = parseInt(b.displayName.replace(/\D/g, ''), 10)
-      if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
-      return a.displayName.localeCompare(b.displayName)
-    })
+    .sort(compareSeats)
 
   return {
     seats,
@@ -425,6 +509,71 @@ async function getSeatsUsage() {
     projectName: config.projectName,
     bizInfo: config.bizInfo,
     rawSeatCount: seatInfoRows.length,
+  }
+}
+
+async function getAgentSeatsUsage() {
+  const seatInfoRows = await listSeatInfos({ scene: config.agentScene })
+  const afpRows = seatInfoRows.length ? await listSeatAfpUsages() : []
+
+  const afpBySeatId = new Map(afpRows.filter((usage) => usage.seatId).map((usage) => [usage.seatId, usage]))
+  const seats = seatInfoRows
+    .filter(isSeatActive)
+    .map((seat) => {
+      const usage = afpBySeatId.get(seat.seatId)
+      return {
+        seatId: seat.seatId,
+        displayName: seat.displayName,
+        bizInfo: seat.bizInfo,
+        planType: usage?.planType || seat.bizInfo,
+        projectName: seat.projectName,
+        usage5h: usage?.fiveHour?.percent ?? null,
+        usage7d: usage?.weekly?.percent ?? null,
+        usage30d: usage?.monthly?.percent ?? null,
+        quotas: {
+          usage5h: toQuotaInfo(usage?.fiveHour),
+          usage7d: toQuotaInfo(usage?.weekly),
+          usage30d: toQuotaInfo(usage?.monthly),
+        },
+        reset5h: usage?.fiveHour?.resetAt ?? null,
+        reset7d: usage?.weekly?.resetAt ?? null,
+        reset30d: usage?.monthly?.resetAt ?? null,
+        effectiveAt: seat.effectiveAt,
+        effectiveEndAt: seat.effectiveEndAt,
+        status: seat.status,
+        billingStatus: seat.billingStatus,
+      }
+    })
+    .sort(compareSeats)
+
+  return {
+    seats,
+    fetchedAt: new Date().toISOString(),
+    scene: config.agentScene,
+    rawSeatCount: seatInfoRows.length,
+  }
+}
+
+async function getSeatsUsage() {
+  // 两套套餐并发查询；AgentPlan 查询失败不影响 CodingPlan 的结果展示。
+  const [coding, agent] = await Promise.all([
+    getCodingSeatsUsage(),
+    getAgentSeatsUsage().catch((error) => ({
+      seats: [],
+      fetchedAt: new Date().toISOString(),
+      scene: config.agentScene,
+      rawSeatCount: 0,
+      error: error instanceof Error ? error.message : '查询 Agent Plan 席位失败',
+    })),
+  ])
+
+  return {
+    ...coding,
+    agentSeats: agent.seats,
+    agentFetchedAt: agent.fetchedAt,
+    agentRawSeatCount: agent.rawSeatCount,
+    agentScene: agent.scene,
+    agentError: agent.error ?? null,
   }
 }
 

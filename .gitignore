@@ -18,6 +18,10 @@ dist-ssr
 # 问题反馈持久化数据
 data
 
+# 席位 APIKey 导出（含明文凭证，禁止提交）
+scripts/seats-running.csv
+*.seats.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
