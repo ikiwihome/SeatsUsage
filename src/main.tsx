@@ -111,14 +111,14 @@ const supportedModels = [
   'glm-latest',
   'kimi-latest',
   'minimax-latest',
-  'mimo-v2.5',
-  'mimo-v2.5-pro',
+  'mimo-v2.6-flash',
+  'mimo-v2.6-pro',
 ] as const
 
 const modelNotes: Record<string, string> = {
   auto: '通过智能算法自动选择模型',
   'deepseek-v4-flash': 'deepseek-v4-flash正式版',
-  'deepseek-v4.1-flash': 'deepseek-v4.1-flash',
+  'deepseek-v4.1-flash': 'deepseek-v4.1-flash-1017最新版本',
   'glm-5.3-flash': 'glm-5.3-flash',
   'kimi-k2.7-code': 'kimi-k2.7-code',
   'minimax-m3': 'minimax-m3',
@@ -126,8 +126,8 @@ const modelNotes: Record<string, string> = {
   'glm-latest': 'glm-5.3-flash',
   'kimi-latest': 'kimi-k2.7-code',
   'minimax-latest': 'minimax-m3',
-  'mimo-v2.5': 'mimo-v2.5',
-  'mimo-v2.5-pro': 'mimo-v2.5-pro',
+  'mimo-v2.6-flash': 'mimo-v2.6-flash',
+  'mimo-v2.6-pro': 'mimo-v2.6-pro',
 }
 
 // 模型卡片右上角角标，用于标记新上线的模型。
@@ -157,10 +157,10 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           `$env:ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
           `$env:ANTHROPIC_AUTH_TOKEN="你创建的API Key"`,
           '$env:ANTHROPIC_MODEL="auto"',
-          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"',
-          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"',
-          '$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"',
-          '$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"',
+          '$env:ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4.1-flash"',
+          '$env:ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4.1-flash"',
+          '$env:ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4.1-flash"',
+          '$env:CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4.1-flash"',
           '$env:ANTHROPIC_API_KEY=""',
           '$env:CLAUDE_CODE_DISABLE_NON_ANTHROPIC_API="1"',
           '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
@@ -174,10 +174,10 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           `export ANTHROPIC_BASE_URL="${accessMethods[1].value}"`,
           `export ANTHROPIC_AUTH_TOKEN="你创建的API Key"`,
           'export ANTHROPIC_MODEL="auto"',
-          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4-flash"',
-          'export ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4-flash"',
-          'export ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4-flash"',
-          'export CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4-flash"',
+          'export ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-v4.1-flash"',
+          'export ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-v4.1-flash"',
+          'export ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-v4.1-flash"',
+          'export CLAUDE_CODE_SUBAGENT_MODEL="deepseek-v4.1-flash"',
           'export ANTHROPIC_API_KEY=""',
           'export CLAUDE_CODE_DISABLE_NON_ANTHROPIC_API="1"',
           'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"',
@@ -198,7 +198,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
       {
         title: '1. 修改config.toml，在文件头部添加如下配置',
         code: [
-          'model = "auto"',
+          'model = "deepseek-v4.1-flash"',
           'model_provider = "evas"',
           'model_reasoning_effort = "high"',
           '',
@@ -244,7 +244,7 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      },',
           '      "models": {',
           '        "auto": {',
-          '          "name": "auto"',
+          '          "name": "deepseek-v4.1-flash"',
           '        }',
           '      }',
           '    }',
@@ -337,14 +337,14 @@ const guideContent: Record<GuideTab, { title: string; description: string; secti
           '      "max_tokens": 128000,',
           '    },',
           '    {',
-          '      "id": "mimo-v2.5",',
+          '      "id": "mimo-v2.6-flash",',
           '      "apiMode": "openai",',
           '      "owned_by": "xiaomi",',
           '      "context_length": 1000000,',
           '      "max_tokens": 131072,',
           '    },',
           '    {',
-          '      "id": "mimo-v2.5-pro",',
+          '      "id": "mimo-v2.6-pro",',
           '      "apiMode": "openai",',
           '      "owned_by": "xiaomi",',
           '      "context_length": 1000000,',
@@ -632,7 +632,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-09-17
+              更新于 2026-10-26
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}

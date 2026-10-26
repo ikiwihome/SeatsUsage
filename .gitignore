@@ -21,6 +21,7 @@ data
 # 席位 APIKey 导出（含明文凭证，禁止提交）
 scripts/seats-running.csv
 *.seats.csv
+seats-*.xlsx
 
 # Editor directories and files
 .vscode/*
