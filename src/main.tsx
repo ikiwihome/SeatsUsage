@@ -29,6 +29,20 @@ type SeatRow = {
   status: string | null
 }
 
+// Agent Plan 共享包是团队共用的额度池（AFP 接口里 PlanType = "shared"），
+// 不对应任何真实席位，因此单独建模。
+type SharedPackageRow = {
+  seatId: string
+  planType: string
+  usage5h: UsageValue
+  usage7d: UsageValue
+  usage30d: UsageValue
+  quotas?: SeatQuotas | null
+  reset5h: string | null
+  reset7d: string | null
+  reset30d: string | null
+}
+
 type SeatsResponse = {
   seats: SeatRow[]
   fetchedAt: string
@@ -36,6 +50,7 @@ type SeatsResponse = {
   bizInfo: string
   rawSeatCount: number
   agentSeats?: SeatRow[]
+  agentSharedPackages?: SharedPackageRow[]
   agentFetchedAt?: string
   agentRawSeatCount?: number
   agentScene?: string
@@ -402,7 +417,10 @@ function codingQuotaItems(key: UsageKey): readonly string[] {
   return [`${quota.token} token`, `${quota.request} 次请求`]
 }
 
-function agentQuotaItems(seat: SeatRow, key: UsageKey): readonly string[] {
+// SeatRow 与 SharedPackageRow 都带 quotas，这里只依赖配额字段。
+type QuotaSource = { quotas?: SeatQuotas | null }
+
+function agentQuotaItems(seat: QuotaSource, key: UsageKey): readonly string[] {
   const info = seat.quotas?.[key]
   if (!info || info.quota === null) return ['额度未下发']
   if (info.used === null) return [`${formatAmount(info.quota)} AFP`]
@@ -632,7 +650,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="version-badge" aria-label="页面更新版本日期">
-              更新于 2026-10-26
+              更新于 2026-11-24
             </span>
             <button className="btn-primary" type="button" onClick={loadDashboard} disabled={state.status === 'loading'}>
               {state.status === 'loading' ? '同步中' : '刷新'}
@@ -816,18 +834,22 @@ function App() {
             <>
               <SeatPlanBlock
                 title="Coding Plan"
-                description={`火山方舟 Coding Plan 团队版席位 · 档位 ${state.data.seats.bizInfo || '-'}`}
+                description={`火山方舟 Coding Plan 企业版席位`}
                 seats={state.data.seats.seats}
                 quotaItems={(_seat, key) => codingQuotaItems(key)}
                 emptyText="ListSeatInfos 没有返回有效的 Pro 档位席位。"
               />
               <SeatPlanBlock
                 title="Agent Plan"
-                description={`火山方舟 Agent Plan 团队版席位 · 场景 ${state.data.seats.agentScene || '-'}`}
+                description={`火山方舟 Agent Plan 企业版席位`}
                 seats={state.data.seats.agentSeats ?? []}
                 quotaItems={agentQuotaItems}
                 emptyText="ListSeatInfos 没有返回有效的 Agent Plan 席位。"
                 error={state.data.seats.agentError}
+              />
+              <SharedPackageBlock
+                packages={state.data.seats.agentSharedPackages ?? []}
+                scene={state.data.seats.agentScene}
               />
             </>
           )}
@@ -1024,6 +1046,50 @@ function SeatPlanBlock({
         </div>
       )}
     </section>
+  )
+}
+
+// 共享包和 Agent Plan 席位共用同一套表格：把 AFP 里的共享包条目规整成
+// SeatRow 形状后直接复用 SeatPlanBlock，避免维护两套不同的渲染逻辑。
+// 5 小时 / 周窗口配额为 0（服务端因此给不出占比），已用量按 0 呈现，
+// 保证「0%」与「已用 0 / 0 AFP」的说法一致。
+function toSharedSeatRow(pkg: SharedPackageRow): SeatRow {
+  const withZeroQuota = (value: UsageValue, key: UsageKey): UsageValue => {
+    if (value !== null) return value
+    return (pkg.quotas?.[key]?.quota ?? null) === 0 ? 0 : null
+  }
+
+  return {
+    seatId: pkg.seatId,
+    displayName: '共享包',
+    bizInfo: '-',
+    planType: pkg.planType,
+    projectName: '',
+    usage5h: withZeroQuota(pkg.usage5h, 'usage5h'),
+    usage7d: withZeroQuota(pkg.usage7d, 'usage7d'),
+    usage30d: withZeroQuota(pkg.usage30d, 'usage30d'),
+    quotas: pkg.quotas,
+    reset5h: pkg.reset5h,
+    reset7d: pkg.reset7d,
+    reset30d: pkg.reset30d,
+    // 共享包不在 ListSeatInfos 里，没有生效区间，用月度额度刷新时间作为截止时间。
+    effectiveAt: null,
+    effectiveEndAt: pkg.reset30d,
+    status: null,
+  }
+}
+
+function SharedPackageBlock({ packages }: { packages: SharedPackageRow[]; scene?: string }) {
+  if (!packages.length) return null
+
+  return (
+    <SeatPlanBlock
+      title="Agent Plan 共享包"
+      description={`团队共用 AFP 额度池，不对应单个席位`}
+      seats={packages.map(toSharedSeatRow)}
+      quotaItems={agentQuotaItems}
+      emptyText="ListSeatAFPUsage 没有返回共享包额度。"
+    />
   )
 }
 

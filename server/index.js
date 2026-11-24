@@ -359,6 +359,30 @@ function toQuotaInfo(window) {
   return { quota: window.quota, used: window.used }
 }
 
+// 共享包在 AFP 用量里体现为 PlanType = "shared" 的条目，
+// 它并不是真实席位（ListSeatInfos 查不到），因此单独抽出来交给前端渲染。
+function isSharedPlan(usage) {
+  return String(usage?.planType ?? '').toLowerCase() === 'shared'
+}
+
+function toSharedPackageRow(usage) {
+  return {
+    seatId: usage.seatId,
+    planType: usage.planType,
+    usage5h: usage.fiveHour?.percent ?? null,
+    usage7d: usage.weekly?.percent ?? null,
+    usage30d: usage.monthly?.percent ?? null,
+    quotas: {
+      usage5h: toQuotaInfo(usage.fiveHour),
+      usage7d: toQuotaInfo(usage.weekly),
+      usage30d: toQuotaInfo(usage.monthly),
+    },
+    reset5h: usage.fiveHour?.resetAt ?? null,
+    reset7d: usage.weekly?.resetAt ?? null,
+    reset30d: usage.monthly?.resetAt ?? null,
+  }
+}
+
 function stringValue(value) {
   if (value === null || value === undefined || value === '') return null
   return String(value)
@@ -467,11 +491,12 @@ async function listSeatAfpUsages() {
   return rows
 }
 
+// 按显示名的英文顺序排序；名称缺失时回退到席位 ID。
+// 数字部分用 numeric 排序，保证 evas2 排在 evas10 之前。
 function compareSeats(a, b) {
-  const numA = parseInt(a.displayName.replace(/\D/g, ''), 10)
-  const numB = parseInt(b.displayName.replace(/\D/g, ''), 10)
-  if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
-  return a.displayName.localeCompare(b.displayName)
+  const nameA = a.displayName || a.seatId || ''
+  const nameB = b.displayName || b.seatId || ''
+  return nameA.localeCompare(nameB, 'en', { numeric: true, sensitivity: 'base' })
 }
 
 async function getCodingSeatsUsage() {
@@ -514,7 +539,9 @@ async function getCodingSeatsUsage() {
 
 async function getAgentSeatsUsage() {
   const seatInfoRows = await listSeatInfos({ scene: config.agentScene })
-  const afpRows = seatInfoRows.length ? await listSeatAfpUsages() : []
+  // 共享包不在 ListSeatInfos 的返回里，只能通过 AFP 用量接口拿到，
+  // 因此即便当前没有有效席位也要查询一次。
+  const afpRows = await listSeatAfpUsages()
 
   const afpBySeatId = new Map(afpRows.filter((usage) => usage.seatId).map((usage) => [usage.seatId, usage]))
   const seats = seatInfoRows
@@ -546,8 +573,11 @@ async function getAgentSeatsUsage() {
     })
     .sort(compareSeats)
 
+  const sharedPackages = afpRows.filter(isSharedPlan).map(toSharedPackageRow)
+
   return {
     seats,
+    sharedPackages,
     fetchedAt: new Date().toISOString(),
     scene: config.agentScene,
     rawSeatCount: seatInfoRows.length,
@@ -570,6 +600,7 @@ async function getSeatsUsage() {
   return {
     ...coding,
     agentSeats: agent.seats,
+    agentSharedPackages: agent.sharedPackages ?? [],
     agentFetchedAt: agent.fetchedAt,
     agentRawSeatCount: agent.rawSeatCount,
     agentScene: agent.scene,
